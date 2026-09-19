@@ -1,0 +1,6 @@
+#!/bin/sh
+# Image version: the nearest git tag without its leading "v", plus commit
+# distance and dirty marker if any. Outside git, or before the first commit,
+# a fixed 0.0.0 so repeated mkosi invocations agree on the output name.
+v=$(git -C "$(dirname "$0")" describe --tags --always --dirty 2>/dev/null | sed 's/^v//')
+printf '%s\n' "${v:-0.0.0}"

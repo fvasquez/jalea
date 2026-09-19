@@ -1,0 +1,12 @@
+[Unit]
+Description=Mark the booted slot group as good
+Documentation=https://github.com/fvasquez/jalea
+After=rauc.service jalea-efi-entries.service multi-user.target
+Requires=rauc.service
+
+[Service]
+Type=oneshot
+ExecStart=rauc status mark-good
+
+[Install]
+WantedBy=multi-user.target

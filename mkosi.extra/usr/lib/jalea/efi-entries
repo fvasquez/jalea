@@ -1,0 +1,54 @@
+#!/bin/bash
+# Make sure the firmware has boot entries "A" and "B" that load the UKI
+# directly from esp_a and esp_b, and that BootOrder lists both. RAUC's efi
+# backend relies on these labels. Idempotent; safe to run every boot.
+set -euo pipefail
+
+[[ -d /sys/firmware/efi/efivars ]] || { echo "not an EFI boot, nothing to do"; exit 0; }
+
+loader='\EFI\Linux\jalea.efi'
+changed=0
+declare -A id
+
+for slot in A B; do
+    label=esp_${slot,,}
+    part=$(readlink -f "/dev/disk/by-partlabel/$label" 2>/dev/null || true)
+    [[ -n $part ]] || { echo "partition $label not found, skipping $slot"; continue; }
+    disk=/dev/$(lsblk -no PKNAME "$part")
+    num=$(cat "/sys/class/block/$(basename "$part")/partition")
+
+    # Existing entry with this label?
+    existing=$(efibootmgr | sed -n "s/^Boot\([0-9A-F]\{4\}\)\*\{0,1\} $slot\([[:space:]].*\)\{0,1\}\$/\1/p" | head -1)
+    if [[ -n $existing ]]; then
+        id[$slot]=$existing
+        continue
+    fi
+    efibootmgr --quiet --create --disk "$disk" --part "$num" --label "$slot" --loader "$loader"
+    id[$slot]=$(efibootmgr | sed -n "s/^Boot\([0-9A-F]\{4\}\)\*\{0,1\} $slot\([[:space:]].*\)\{0,1\}\$/\1/p" | head -1)
+    echo "created boot entry $slot (Boot${id[$slot]}) -> $disk part $num $loader"
+    changed=1
+done
+
+# If we created anything, put A then B at the front of BootOrder and keep
+# whatever else the firmware had behind them (efibootmgr --create prepends
+# each new entry, which would leave B first). Otherwise never reorder: RAUC
+# owns the relative order of A and B from here on.
+if (( changed )); then
+    order=$(efibootmgr | sed -n 's/^BootOrder: //p')
+    rest=$(tr ',' '\n' <<<"$order" | grep -vx -e "${id[A]:-none}" -e "${id[B]:-none}" | paste -sd, -)
+    new="${id[A]:+${id[A]},}${id[B]:+${id[B]},}$rest"
+    new=${new%,}
+    efibootmgr --quiet --bootorder "$new"
+    echo "BootOrder set to $new"
+fi
+
+# If this boot did not come through A or B (first boot via the fallback
+# loader, or NVRAM was reset), make the next one go through A so RAUC can
+# tell which group is running.
+current=$(efibootmgr | sed -n 's/^BootCurrent: //p')
+if [[ -v id[A] && -n $current && $current != "${id[A]}" && ( ! -v id[B] || $current != "${id[B]}" ) ]]; then
+    efibootmgr --quiet --bootnext "${id[A]}"
+    echo "booted via Boot$current, not a slot entry; BootNext set to A for the next boot"
+fi
+
+exit 0

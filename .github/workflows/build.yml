@@ -1,0 +1,70 @@
+name: build
+
+on:
+  push:
+    branches: [main]
+    tags: ['v*']
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  image:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0   # mkosi.version uses git describe
+
+      - name: Install mkosi
+        uses: systemd/mkosi@v27
+
+      - name: RAUC signing material
+        env:
+          RAUC_KEY: ${{ secrets.RAUC_KEY }}
+          RAUC_CERT: ${{ vars.RAUC_CERT }}
+        run: |
+          mkdir -p keys
+          if [ -n "$RAUC_KEY" ] && [ -n "$RAUC_CERT" ]; then
+            printf '%s\n' "$RAUC_KEY" > keys/rauc.key
+            printf '%s\n' "$RAUC_CERT" > keys/rauc.crt
+            chmod 0600 keys/rauc.key
+            echo "using the repository's RAUC key"
+          else
+            ./scripts/gen-dev-keys.sh
+            echo "::warning::RAUC_KEY/RAUC_CERT not set; bundle signed with a throwaway key"
+          fi
+
+      - name: Build image
+        run: mkosi --debug build
+
+      - name: Build RAUC bundle
+        run: ./scripts/build-bundle.sh
+
+      - name: Collect artifacts
+        id: collect
+        run: |
+          v=$(./mkosi.version)
+          echo "version=$v" >> "$GITHUB_OUTPUT"
+          mkdir -p dist
+          cp mkosi.output/jalea_$v.raucb dist/
+          cp mkosi.output/jalea_$v.efi dist/ 2>/dev/null || cp mkosi.output/jalea.efi dist/jalea_$v.efi
+          zstd -T0 -19 -q mkosi.output/jalea_$v.raw -o dist/jalea_$v.raw.zst
+          cp keys/rauc.crt dist/jalea_$v.rauc-cert.pem
+          (cd dist && sha256sum * > SHA256SUMS)
+          ls -l dist
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: jalea-${{ steps.collect.outputs.version }}
+          path: dist/
+          retention-days: 14
+
+      - name: Release
+        if: startsWith(github.ref, 'refs/tags/v')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: dist/*
+          generate_release_notes: true

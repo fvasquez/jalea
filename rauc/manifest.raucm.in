@@ -1,0 +1,23 @@
+[update]
+compatible=jalea-x86-64
+version=@VERSION@
+description=Jalea @VERSION@
+
+[bundle]
+format=verity
+
+[hooks]
+filename=hook
+
+[image.usr]
+filename=usr.img
+adaptive=block-hash-index
+hooks=post-install
+
+[image.verity]
+filename=verity.img
+adaptive=block-hash-index
+hooks=post-install
+
+[image.efi]
+filename=esp.vfat

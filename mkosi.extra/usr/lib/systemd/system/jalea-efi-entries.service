@@ -1,0 +1,15 @@
+[Unit]
+Description=Ensure firmware boot entries for slot groups A and B
+Documentation=https://github.com/fvasquez/jalea
+ConditionPathExists=/sys/firmware/efi/efivars
+DefaultDependencies=no
+After=systemd-udev-settle.service local-fs.target
+Before=rauc.service rauc-mark-good.service jalea-mark-good.service
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+ExecStart=/usr/lib/jalea/efi-entries
+
+[Install]
+WantedBy=multi-user.target

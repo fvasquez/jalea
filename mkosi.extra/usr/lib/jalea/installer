@@ -1,0 +1,136 @@
+#!/bin/bash
+# Jalea installer. Runs from the USB stick's "Install" boot entry and copies
+# the running system onto a target disk:
+#
+#   esp_a, verity_a, usr_a   block copies of what we booted from
+#   esp_b, verity_b, usr_b   empty, for the first RAUC update
+#   data                     LUKS2 root, TPM2 enrolled, btrfs, with the
+#                            account and hostname the user chooses here
+#
+# Then it creates firmware boot entries A and B. The installed system's
+# first boot is a normal boot: nothing is left to provision.
+set -euo pipefail
+
+defs=/usr/lib/jalea/install/repart.d
+run=/run/jalea
+mkdir -p "$run"
+
+die() { echo "error: $*" >&2; exit 1; }
+
+echo
+echo "=== Jalea installer ==="
+echo
+
+udevadm settle || true
+
+# --- 1. Where did we boot from, and what can we install to? -----------------
+esp_src=$(findmnt -no SOURCE /efi 2>/dev/null || findmnt -no SOURCE /boot 2>/dev/null || true)
+boot_disk=""
+[[ -n $esp_src ]] && boot_disk=$(lsblk -no PKNAME "$esp_src" 2>/dev/null || true)
+
+mapfile -t disks < <(lsblk -dno NAME,TYPE | awk '$2=="disk"{print $1}' \
+    | grep -vE '^(loop|sr|zram|ram|fd)' | grep -vx "${boot_disk:-__none__}")
+(( ${#disks[@]} )) || die "no target disks found (boot disk ${boot_disk:-?} is excluded)"
+
+echo "Available target disks:"
+for d in "${disks[@]}"; do
+    printf '  %-10s %8s  %s\n' "/dev/$d" "$(lsblk -dno SIZE "/dev/$d")" "$(lsblk -dno MODEL "/dev/$d" | sed 's/ *$//')"
+done
+echo
+default=${disks[0]}
+for d in "${disks[@]}"; do [[ $d == nvme* ]] && { default=$d; break; }; done
+read -rp "Install to [/dev/$default]: " target
+target=${target:-/dev/$default}
+[[ -b $target ]] || die "$target is not a block device"
+
+# --- 2. Identity ------------------------------------------------------------
+read -rp "Hostname [jalea]: " hostname
+hostname=${hostname:-jalea}
+[[ $hostname =~ ^[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?$ ]] || die "invalid hostname"
+
+while :; do
+    read -rp "Username: " username
+    [[ $username =~ ^[a-z_][a-z0-9_-]{0,31}$ ]] && break
+    echo "  use lowercase letters, digits, - and _"
+done
+while :; do
+    read -rsp "Password: " pw1; echo
+    read -rsp "Password (again): " pw2; echo
+    [[ -n $pw1 && $pw1 == "$pw2" ]] && break
+    echo "  passwords empty or different, try again"
+done
+hash=$(printf '%s' "$pw1" | openssl passwd -6 -stdin)
+unset pw1 pw2
+
+echo
+echo "This will ERASE EVERYTHING on $target."
+read -rp "Type 'yes' to continue: " ok
+[[ $ok == yes ]] || die "aborted"
+echo
+
+# --- 3. Partition the disk with systemd-repart ------------------------------
+# The UKI locates the usr partition and its hash tree by GPT UUID, derived
+# from the verity root hash on our own kernel command line. Bake those UUIDs
+# into the definitions for the copies we are about to make.
+usrhash=$(sed -n 's/.*\busrhash=\([0-9a-f]\{64\}\).*/\1/p' /proc/cmdline)
+[[ -n $usrhash ]] || die "no usrhash= on the kernel command line"
+fmt() { sed -E 's/^(.{8})(.{4})(.{4})(.{4})(.{12})$/\1-\2-\3-\4-\5/' <<<"$1"; }
+usr_uuid=$(fmt "${usrhash:0:32}")
+verity_uuid=$(fmt "${usrhash:32:32}")
+
+rm -rf "$run/repart.d"; cp -a "$defs" "$run/repart.d"
+sed -i "s/@USR_UUID@/$usr_uuid/; s/@VERITY_UUID@/$verity_uuid/" "$run"/repart.d/*.conf
+
+echo "Partitioning $target ..."
+systemd-repart --dry-run=no --empty=force --definitions="$run/repart.d" \
+    --tpm2-device=auto --tpm2-pcrs=7 "$target"
+udevadm settle
+
+# --- 4. Put the account and hostname on the new root ------------------------
+echo "Unlocking the new root with the TPM2 ..."
+data=$(lsblk -lno PATH,PARTLABEL "$target" | awk '$2=="data"{print $1}')
+[[ -b $data ]] || die "data partition missing on $target"
+/usr/lib/systemd/systemd-cryptsetup attach jalea-install "$data" - tpm2-device=auto
+mnt=$run/root
+mkdir -p "$mnt"
+mount /dev/mapper/jalea-install "$mnt"
+
+echo "$hostname" > "$mnt/etc/hostname"
+# systemd-sysusers reads these on first boot (ImportCredential=) and creates
+# the account with the chosen password. The user owns their group (uid=gid).
+install -d -m 0700 "$mnt/etc/credstore"
+printf 'g %s 1000\nu %s 1000:1000 "%s" /home/%s /bin/bash\nm %s sudo\nm %s systemd-journal\nm %s nix-users\n' \
+    "$username" "$username" "$username" "$username" "$username" "$username" "$username" \
+    > "$mnt/etc/credstore/sysusers.extra"
+printf '%s' "$hash" > "$mnt/etc/credstore/passwd.hashed-password.$username"
+chmod 0600 "$mnt"/etc/credstore/*
+install -d -m 0700 -o 1000 -g 1000 "$mnt/home/$username"
+cp -a /etc/skel/. "$mnt/home/$username/" 2>/dev/null || true
+chown -R 1000:1000 "$mnt/home/$username"
+
+sync
+umount "$mnt"
+/usr/lib/systemd/systemd-cryptsetup detach jalea-install
+
+# --- 5. Firmware boot entries ----------------------------------------------
+echo "Creating firmware boot entries A and B ..."
+for slot in A B; do
+    label=esp_${slot,,}
+    num=$(lsblk -lno PARTN,PARTLABEL "$target" | awk -v l="$label" '$2==l{print $1}')
+    [[ -n $num ]] || die "partition $label missing on $target"
+    old=$(efibootmgr | sed -n "s/^Boot\([0-9A-F]\{4\}\)\*\{0,1\} $slot\([[:space:]].*\)\{0,1\}\$/\1/p")
+    for o in $old; do efibootmgr --quiet --delete-bootnum --bootnum "$o"; done
+    efibootmgr --quiet --create --disk "$target" --part "$num" --label "$slot" --loader '\EFI\Linux\jalea.efi'
+done
+a=$(efibootmgr | sed -n 's/^Boot\([0-9A-F]\{4\}\)\*\{0,1\} A\([[:space:]].*\)\{0,1\}$/\1/p' | head -1)
+b=$(efibootmgr | sed -n 's/^Boot\([0-9A-F]\{4\}\)\*\{0,1\} B\([[:space:]].*\)\{0,1\}$/\1/p' | head -1)
+rest=$(efibootmgr | sed -n 's/^BootOrder: //p' | tr ',' '\n' | grep -vx -e "$a" -e "$b" | paste -sd, -)
+efibootmgr --quiet --bootorder "$a,$b${rest:+,$rest}"
+efibootmgr --quiet --bootnext "$a"
+
+echo
+echo "Done. Remove the USB stick and reboot; the first boot is a normal boot."
+echo "Log in as $username on the console or over SSH."
+echo
+read -rp "Press Enter to reboot now, or Ctrl-C to stay here. "
+systemctl reboot

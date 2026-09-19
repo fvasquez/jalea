@@ -1,0 +1,21 @@
+[Unit]
+Description=Install the current Nix from nixpkgs into the system profile
+Documentation=https://github.com/fvasquez/jalea
+# Debian's Nix package is only the seed. Once, when the network is up, let
+# it fetch the current release into /nix/var/nix/profiles/default and then
+# restart the daemon on it.
+ConditionPathExists=!/nix/var/nix/profiles/default/bin/nix
+After=network-online.target nix-daemon.service
+Wants=network-online.target nix-daemon.service
+
+[Service]
+Type=oneshot
+Environment=NIX_SSL_CERT_FILE=/etc/ssl/certs/ca-certificates.crt
+ExecStart=/usr/bin/nix --extra-experimental-features "nix-command flakes" profile install nixpkgs#nix
+# --no-block: a synchronous restart of the daemon would tear this unit down with it.
+ExecStartPost=systemctl --no-block restart nix-daemon.service
+Restart=on-failure
+RestartSec=5min
+
+[Install]
+WantedBy=multi-user.target

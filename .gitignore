@@ -1,0 +1,21 @@
+# mkosi build state
+/mkosi.output/
+/mkosi.cache/
+/mkosi.builddir/
+/mkosi.workspace/
+/mkosi.tools/
+/mkosi.tools.manifest
+/mkosi.history/
+/mkosi.packages/
+/.mkosi-private/
+
+# local signing material (never commit)
+/keys/
+*.pem
+*.key
+*.crt
+!/rauc/README.md
+
+# local overrides
+/mkosi.local.conf
+/mkosi.conf.d/99-local*.conf

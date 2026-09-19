@@ -1,0 +1,7 @@
+[Unit]
+Description=Jalea installer
+Requires=basic.target
+Conflicts=rescue.service rescue.target
+After=basic.target rescue.service rescue.target
+Wants=jalea-installer.service getty@tty2.service
+AllowIsolate=yes

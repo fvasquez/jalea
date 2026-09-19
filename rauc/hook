@@ -1,0 +1,35 @@
+#!/bin/sh
+# RAUC bundle hook for Jalea.
+#
+# The UKI in this bundle carries roothash=<hash> on its kernel command line
+# and nothing else that names a partition. systemd-gpt-auto-generator then
+# locates the root pair by GPT partition UUID: the data partition must carry
+# the first 128 bits of the roothash as its UUID and the hash partition the
+# last 128 bits. systemd-repart sets those UUIDs when it builds the image;
+# after RAUC dd's the same images into the other slot group, this hook sets
+# them on the target partitions so the freshly installed UKI can find them.
+set -eu
+
+here=$(dirname "$(readlink -f "$0")")
+roothash=$(cat "$here/roothash")
+
+case "$1" in
+slot-post-install)
+    uuid_for_class() {
+        case "$1" in
+        usr) printf '%s' "$roothash" | cut -c1-32 ;;
+        verity) printf '%s' "$roothash" | cut -c33-64 ;;
+        esac
+    }
+    uuid=$(uuid_for_class "$RAUC_SLOT_CLASS")
+    [ -n "$uuid" ] || exit 0
+    # Format as 8-4-4-4-12 for sfdisk.
+    fmt=$(printf '%s' "$uuid" | sed -E 's/^(.{8})(.{4})(.{4})(.{4})(.{12})$/\1-\2-\3-\4-\5/')
+    # RAUC passes the device as configured (a by-partlabel symlink); resolve it.
+    part=$(readlink -f "$RAUC_SLOT_DEVICE")
+    disk=$(lsblk -no PKNAME "$part")
+    num=$(cat "/sys/class/block/$(basename "$part")/partition")
+    sfdisk --part-uuid "/dev/$disk" "$num" "$fmt"
+    ;;
+esac
+exit 0

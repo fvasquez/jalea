@@ -1,0 +1,6 @@
+#!/bin/sh
+# Run the newest Nix available: the one Nix itself installed into the system
+# profile if there is one, otherwise the Debian package that seeded it.
+d=/nix/var/nix/profiles/default/bin/nix-daemon
+[ -x "$d" ] && exec "$d" "$@"
+exec /usr/bin/nix-daemon "$@"

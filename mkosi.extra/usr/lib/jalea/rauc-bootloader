@@ -1,0 +1,66 @@
+#!/bin/bash
+# RAUC custom bootloader backend for Jalea.
+#
+# Same model as RAUC's built-in efi backend: slot groups A and B are firmware
+# boot entries with those labels, "primary" is BootNext, "good" puts the entry
+# at the front of BootOrder and "bad" removes it. The one difference is how
+# the running group is identified: not from BootCurrent (empty or generic when
+# the firmware took the fallback loader path, as on a first boot from a USB
+# stick or after an NVRAM reset) but from the ESP the UKI was actually loaded
+# from, which systemd-stub records in the LoaderDevicePartUUID EFI variable.
+set -euo pipefail
+
+efivar=/sys/firmware/efi/efivars/LoaderDevicePartUUID-4a67b082-0a4c-41cf-b6c7-440b29bb8c4f
+
+entry_id() {  # bootname -> Boot#### id
+    efibootmgr | sed -n "s/^Boot\([0-9A-F]\{4\}\)\*\{0,1\} $1\([[:space:]].*\)\{0,1\}\$/\1/p" | head -1
+}
+boot_order() { efibootmgr | sed -n 's/^BootOrder: //p'; }
+boot_next()  { efibootmgr | sed -n 's/^BootNext: //p'; }
+slot_of_id() {  # Boot#### id -> bootname, if it is one of ours
+    for s in A B; do [[ $(entry_id "$s") == "$1" ]] && { echo "$s"; return 0; }; done
+    return 1
+}
+
+case ${1:-} in
+get-current)
+    [[ -r $efivar ]] || { echo "no LoaderDevicePartUUID" >&2; exit 1; }
+    booted=$(cat "$efivar" | tail -c +5 | iconv -f UTF-16LE -t UTF-8 | tr -d '\0' | tr 'A-Z' 'a-z')
+    for s in A B; do
+        part=$(readlink -f "/dev/disk/by-partlabel/esp_${s,,}" 2>/dev/null) || continue
+        [[ $(lsblk -no PARTUUID "$part") == "$booted" ]] && { echo "$s"; exit 0; }
+    done
+    echo "booted ESP $booted is neither esp_a nor esp_b" >&2
+    exit 1
+    ;;
+get-primary)
+    n=$(boot_next)
+    if [[ -n $n ]] && s=$(slot_of_id "$n"); then echo "$s"; exit 0; fi
+    for id in $(boot_order | tr ',' ' '); do
+        if s=$(slot_of_id "$id"); then echo "$s"; exit 0; fi
+    done
+    exit 1
+    ;;
+set-primary)
+    id=$(entry_id "$2"); [[ -n $id ]] || { echo "no boot entry $2" >&2; exit 1; }
+    efibootmgr --quiet --bootnext "$id"
+    ;;
+get-state)
+    id=$(entry_id "$2"); [[ -n $id ]] || { echo "no boot entry $2" >&2; exit 1; }
+    if [[ ",$(boot_order)," == *",$id,"* ]]; then echo good; else echo bad; fi
+    ;;
+set-state)
+    id=$(entry_id "$2"); [[ -n $id ]] || { echo "no boot entry $2" >&2; exit 1; }
+    rest=$(boot_order | tr ',' '\n' | grep -vx "$id" | paste -sd, -)
+    case $3 in
+    good) new="$id${rest:+,$rest}" ;;
+    bad)  new="$rest" ;;
+    *) echo "unknown state $3" >&2; exit 1 ;;
+    esac
+    efibootmgr --quiet --bootorder "$new"
+    ;;
+*)
+    echo "usage: $0 get-current|get-primary|set-primary <slot>|get-state <slot>|set-state <slot> good|bad" >&2
+    exit 1
+    ;;
+esac

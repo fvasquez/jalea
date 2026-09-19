@@ -1,0 +1,14 @@
+#!/bin/bash
+# Runs after package installation, outside the chroot. Puts the RAUC bundle
+# signing certificate into the image so the device trusts our bundles.
+#
+#   keys/rauc.crt   the certificate (public). In CI this comes from the
+#                   RAUC_CERT repository variable; locally from
+#                   scripts/gen-dev-keys.sh.
+set -euo pipefail
+cert="$SRCDIR/keys/rauc.crt"
+if [[ ! -f $cert ]]; then
+    echo "mkosi.postinst: $cert not found; run scripts/gen-dev-keys.sh first" >&2
+    exit 1
+fi
+install -D -m 0644 "$cert" "$BUILDROOT/usr/share/factory/etc/rauc/keyring.pem"

@@ -1,0 +1,5 @@
+g jalea 1000
+u jalea 1000:1000 "Jalea" /home/jalea /bin/bash
+m jalea sudo
+m jalea systemd-journal
+m jalea nix-users
