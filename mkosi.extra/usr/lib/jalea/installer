@@ -67,6 +67,22 @@ done
 hash=$(printf '%s' "$pw1" | openssl passwd -6 -stdin)
 unset pw1 pw2
 
+# --- 2b. Wi-Fi (optional) ---------------------------------------------------
+# iwd connects to any network it has a profile for, so a profile written now
+# means the machine is on the network on its first boot, before anyone logs
+# in. The profile lives on the encrypted root.
+read -rp "Wi-Fi network name (SSID), empty for none: " ssid
+wifi_pass=""
+if [[ -n $ssid ]]; then
+    while :; do
+        read -rsp "Wi-Fi passphrase: " wp1; echo
+        read -rsp "Wi-Fi passphrase (again): " wp2; echo
+        [[ ${#wp1} -ge 8 && $wp1 == "$wp2" ]] && break
+        echo "  passphrases differ or shorter than 8 characters, try again"
+    done
+    wifi_pass=$wp1; unset wp1 wp2
+fi
+
 echo
 echo "This will ERASE EVERYTHING on $target."
 read -rp "Type 'yes' to continue: " ok
@@ -114,6 +130,16 @@ printf 'g %s 1000\nu %s 1000:1000 "%s" /home/%s /bin/bash\nm %s sudo\nm %s syste
     > "$mnt/etc/credstore/sysusers.extra"
 printf '%s' "$hash" > "$mnt/etc/credstore/passwd.hashed-password.$username"
 chmod 0600 "$mnt"/etc/credstore/*
+# iwd profile: <ssid>.psk, or =<hex ssid>.psk when the SSID has characters
+# outside [A-Za-z0-9_-] (iwd's own file naming rule).
+if [[ -n $ssid ]]; then
+    if [[ $ssid =~ ^[A-Za-z0-9_-]+$ ]]; then name=$ssid.psk
+    else name="=$(printf '%s' "$ssid" | od -An -tx1 | tr -d ' \n').psk"; fi
+    install -d -m 0700 "$mnt/var/lib/iwd"
+    printf '[Security]\nPassphrase=%s\n' "$wifi_pass" > "$mnt/var/lib/iwd/$name"
+    chmod 0600 "$mnt/var/lib/iwd/$name"
+    unset wifi_pass
+fi
 install -d -m 0700 -o 1000 -g 1000 "$mnt/home/$username"
 cp -a /etc/skel/. "$mnt/home/$username/" 2>/dev/null || true
 chown -R 1000:1000 "$mnt/home/$username"
@@ -141,6 +167,7 @@ efibootmgr --quiet --bootnext "$a"
 echo
 echo "Done. Remove the USB stick and reboot; the first boot is a normal boot."
 echo "Log in as $username on the console or over SSH."
+[[ -n $ssid ]] && echo "It will join the Wi-Fi network '$ssid' by itself."
 echo
 read -rp "Press Enter to reboot now, or Ctrl-C to stay here. "
 systemctl reboot

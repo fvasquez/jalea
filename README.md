@@ -119,18 +119,25 @@ mkosi burn /dev/sdX          # or: dd if=mkosi.output/jalea_<version>.raw of=/de
 
 Boot the stick with Secure Boot disabled. systemd-boot shows two entries;
 pick **Install Jalea to a disk**. The installer asks for the target disk, a
-hostname, a username and a password, then
+hostname, a username and a password, and optionally a Wi-Fi network and
+passphrase, then
 
 1. partitions the disk with systemd-repart, block-copying the ESP, usr and
    verity partitions it booted from into slot group A and leaving B empty,
 2. creates the LUKS2 root, enrolled to the TPM2 (PCR 7), formats it btrfs
    with subvolumes for `/var`, `/home` and `/nix`,
 3. drops the hostname and the account (as systemd credentials that
-   systemd-sysusers consumes on first boot) onto the new root,
+   systemd-sysusers consumes on first boot) onto the new root, plus an iwd
+   profile for the Wi-Fi network if you gave one, so the machine is online
+   on its first boot,
 4. creates firmware boot entries `A` and `B` pointing at the two UKIs.
 
 Remove the stick and reboot. The first boot is an ordinary boot: log in on
 the console or over SSH with the account you created. `sudo` works.
+
+Networking is systemd-networkd with DHCP on wired and wireless interfaces
+and iwd for Wi-Fi. To join another network later, use `iwctl`; iwd remembers
+it under `/var/lib/iwd`, which is on the encrypted volume.
 
 If you let the stick's default entry boot instead, you get a live Jalea
 whose encrypted root is created *on the stick*. That is a feature, not an

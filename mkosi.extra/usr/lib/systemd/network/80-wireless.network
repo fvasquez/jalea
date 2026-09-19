@@ -1,0 +1,11 @@
+# iwd associates; systemd-networkd configures the address.
+[Match]
+Type=wlan
+
+[Network]
+DHCP=yes
+MulticastDNS=yes
+IgnoreCarrierLoss=3s
+
+[DHCPv4]
+UseHostname=no
