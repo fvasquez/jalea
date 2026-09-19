@@ -8,6 +8,9 @@
 # the firmware took the fallback loader path, as on a first boot from a USB
 # stick or after an NVRAM reset) but from the ESP the UKI was actually loaded
 # from, which systemd-stub records in the LoaderDevicePartUUID EFI variable.
+# That partition is looked up on the system disk only (see system-disk), so
+# an inserted installer stick with the same partition labels cannot confuse
+# the answer.
 set -euo pipefail
 
 efivar=/sys/firmware/efi/efivars/LoaderDevicePartUUID-4a67b082-0a4c-41cf-b6c7-440b29bb8c4f
@@ -26,12 +29,13 @@ case ${1:-} in
 get-current)
     [[ -r $efivar ]] || { echo "no LoaderDevicePartUUID" >&2; exit 1; }
     booted=$(cat "$efivar" | tail -c +5 | iconv -f UTF-16LE -t UTF-8 | tr -d '\0' | tr 'A-Z' 'a-z')
-    for s in A B; do
-        part=$(readlink -f "/dev/disk/by-partlabel/esp_${s,,}" 2>/dev/null) || continue
-        [[ $(lsblk -no PARTUUID "$part") == "$booted" ]] && { echo "$s"; exit 0; }
-    done
-    echo "booted ESP $booted is neither esp_a nor esp_b" >&2
-    exit 1
+    disk=$(/usr/lib/jalea/system-disk)
+    label=$(lsblk -lno PARTUUID,PARTLABEL "$disk" | awk -v u="$booted" '$1==u{print $2}')
+    case $label in
+    esp_a) echo A ;;
+    esp_b) echo B ;;
+    *) echo "booted ESP $booted on $disk is neither esp_a nor esp_b (label '$label')" >&2; exit 1 ;;
+    esac
     ;;
 get-primary)
     n=$(boot_next)

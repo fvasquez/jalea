@@ -6,15 +6,18 @@ set -euo pipefail
 
 [[ -d /sys/firmware/efi/efivars ]] || { echo "not an EFI boot, nothing to do"; exit 0; }
 
+# Only the system disk counts: an inserted installer stick has esp_a/esp_b
+# partitions too, and an entry pointing at it would be worse than none.
+disk=$(/usr/lib/jalea/system-disk) || { echo "cannot identify the system disk, nothing to do"; exit 0; }
+
 loader='\EFI\Linux\jalea.efi'
 changed=0
 declare -A id
 
 for slot in A B; do
     label=esp_${slot,,}
-    part=$(readlink -f "/dev/disk/by-partlabel/$label" 2>/dev/null || true)
-    [[ -n $part ]] || { echo "partition $label not found, skipping $slot"; continue; }
-    disk=/dev/$(lsblk -no PKNAME "$part")
+    part=$(lsblk -lno PATH,PARTLABEL "$disk" | awk -v l="$label" '$2==l{print $1}')
+    [[ -n $part ]] || { echo "partition $label not found on $disk, skipping $slot"; continue; }
     num=$(cat "/sys/class/block/$(basename "$part")/partition")
 
     # Existing entry with this label?

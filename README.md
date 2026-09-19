@@ -175,6 +175,16 @@ ESP that systemd-stub reports it was loaded from (`LoaderDevicePartUUID`),
 which works even when the firmware booted via the fallback loader and
 `BootCurrent` names no slot.
 
+That booted ESP also defines the *system disk*, and everything that names a
+slot partition is scoped to it. The installer stick is the same image as an
+installed system, so it carries the same partition labels, and when it holds
+the build that is running, the same usr/verity partition UUIDs. A udev rule
+(`61-jalea-system-disk.rules`, in the initrd too) gives the system disk's
+partitions priority for the `/dev/disk/by-partlabel` and `by-partuuid`
+symlinks, so RAUC's slots and the initrd's `/usr` lookup resolve to the
+right disk even with a stick inserted; `/usr/lib/jalea/system-disk` is the
+helper behind it. Still, take the stick out when you are not installing.
+
 Local builds can be installed the same way by serving `mkosi.output/` over
 HTTP, or by copying the bundle over and running `rauc install` on the file.
 

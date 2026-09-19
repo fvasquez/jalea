@@ -1,0 +1,11 @@
+# Partitions on the system disk (the one holding the ESP this UKI was loaded
+# from) win the /dev/disk/by-partlabel and by-partuuid symlinks over any other
+# disk carrying the same labels or UUIDs. The installer stick does exactly
+# that, and without this an inserted stick could be picked as /usr in the
+# initrd or as a RAUC slot. Ships in the initrd as well as the system.
+ACTION=="remove", GOTO="jalea_system_disk_end"
+SUBSYSTEM!="block", GOTO="jalea_system_disk_end"
+ENV{DEVTYPE}!="partition", GOTO="jalea_system_disk_end"
+ENV{ID_PART_ENTRY_SCHEME}!="gpt", GOTO="jalea_system_disk_end"
+PROGRAM=="/usr/lib/jalea/system-disk %k", OPTIONS+="link_priority=100"
+LABEL="jalea_system_disk_end"

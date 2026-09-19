@@ -25,12 +25,20 @@ udevadm settle || true
 
 # --- 1. Where did we boot from, and what can we install to? -----------------
 # systemd-stub records the partition it was loaded from; that is the stick.
-boot_disk=""
-efivar=/sys/firmware/efi/efivars/LoaderDevicePartUUID-4a67b082-0a4c-41cf-b6c7-440b29bb8c4f
-if [[ -r $efivar ]]; then
-    booted=$(cat "$efivar" | tail -c +5 | iconv -f UTF-16LE -t UTF-8 | tr -d '\0' | tr 'A-Z' 'a-z')
-    part=$(readlink -f "/dev/disk/by-partuuid/$booted" 2>/dev/null || true)
-    [[ -n $part ]] && boot_disk=$(lsblk -no PKNAME "$part" 2>/dev/null || true)
+boot_disk=$(/usr/lib/jalea/system-disk 2>/dev/null | sed 's#^/dev/##' || true)
+
+# The copies below take their blocks from the running /usr and ESP. Make sure
+# /usr really comes from the stick: a target that already holds this very
+# build has usr/verity partitions with the same GPT UUIDs, and if the initrd
+# had assembled /usr from those, repartitioning the target would pull the
+# source out from under the copy.
+if [[ -n $boot_disk ]]; then
+    usr_dm=$(basename "$(readlink -f "$(findmnt -no SOURCE /usr)")")
+    for s in "/sys/class/block/$usr_dm"/slaves/*; do
+        [[ -e $s ]] || continue
+        d=$(lsblk -no PKNAME "/dev/${s##*/}")
+        [[ $d == "$boot_disk" ]] || die "/usr is backed by /dev/${s##*/} on $d, not by the boot disk $boot_disk; refusing to install"
+    done
 fi
 
 mapfile -t disks < <(lsblk -dno NAME,TYPE | awk '$2=="disk"{print $1}' \
