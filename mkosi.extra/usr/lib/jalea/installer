@@ -108,7 +108,10 @@ for f in "$run"/repart.d/*.conf; do
 done
 
 echo "Partitioning $target ..."
-systemd-repart --dry-run=no --empty=force --definitions="$run/repart.d" \
+# --discard=no: repart would otherwise TRIM every new partition first, which
+# on a large NVMe can take many minutes and gains nothing here: the space is
+# overwritten by the LUKS volume, and btrfs can discard as it goes.
+systemd-repart --dry-run=no --empty=force --discard=no --definitions="$run/repart.d" \
     --tpm2-device=auto --tpm2-pcrs=7 "$target"
 udevadm settle
 
