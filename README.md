@@ -117,8 +117,8 @@ Write the disk image to a USB stick:
 mkosi burn /dev/sdX          # or: dd if=mkosi.output/jalea_<version>.raw of=/dev/sdX bs=4M
 ```
 
-Boot the stick with Secure Boot disabled. systemd-boot shows two entries;
-pick **Install Jalea to a disk**. The installer asks for the target disk, a
+Boot the stick with Secure Boot disabled. systemd-boot shows its menu for
+ten seconds; pick **Install Jalea to a disk**. The installer asks for the target disk, a
 hostname, a username and a password, and optionally a Wi-Fi network and
 passphrase, then
 
@@ -132,7 +132,8 @@ passphrase, then
    on its first boot,
 4. creates firmware boot entries `A` and `B` pointing at the two UKIs.
 
-Remove the stick and reboot. The first boot is an ordinary boot: log in on
+The installer powers the machine off. Remove the stick and power it on. The
+first boot is an ordinary boot: log in on
 the console or over SSH with the account you created. `sudo` works.
 
 Networking is systemd-networkd with DHCP on wired and wireless interfaces

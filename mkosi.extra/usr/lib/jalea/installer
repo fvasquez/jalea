@@ -165,9 +165,9 @@ efibootmgr --quiet --bootorder "$a,$b${rest:+,$rest}"
 efibootmgr --quiet --bootnext "$a"
 
 echo
-echo "Done. Remove the USB stick and reboot; the first boot is a normal boot."
-echo "Log in as $username on the console or over SSH."
+echo "Done. The machine will power off; remove the USB stick, then power it on."
+echo "The first boot is a normal boot. Log in as $username on the console or over SSH."
 [[ -n $ssid ]] && echo "It will join the Wi-Fi network '$ssid' by itself."
 echo
-read -rp "Press Enter to reboot now, or Ctrl-C to stay here. "
-systemctl reboot
+read -rp "Press Enter to power off. "
+systemctl poweroff
