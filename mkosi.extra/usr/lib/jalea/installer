@@ -24,9 +24,14 @@ echo
 udevadm settle || true
 
 # --- 1. Where did we boot from, and what can we install to? -----------------
-esp_src=$(findmnt -no SOURCE /efi 2>/dev/null || findmnt -no SOURCE /boot 2>/dev/null || true)
+# systemd-stub records the partition it was loaded from; that is the stick.
 boot_disk=""
-[[ -n $esp_src ]] && boot_disk=$(lsblk -no PKNAME "$esp_src" 2>/dev/null || true)
+efivar=/sys/firmware/efi/efivars/LoaderDevicePartUUID-4a67b082-0a4c-41cf-b6c7-440b29bb8c4f
+if [[ -r $efivar ]]; then
+    booted=$(cat "$efivar" | tail -c +5 | iconv -f UTF-16LE -t UTF-8 | tr -d '\0' | tr 'A-Z' 'a-z')
+    part=$(readlink -f "/dev/disk/by-partuuid/$booted" 2>/dev/null || true)
+    [[ -n $part ]] && boot_disk=$(lsblk -no PKNAME "$part" 2>/dev/null || true)
+fi
 
 mapfile -t disks < <(lsblk -dno NAME,TYPE | awk '$2=="disk"{print $1}' \
     | grep -vE '^(loop|sr|zram|ram|fd)' | grep -vx "${boot_disk:-__none__}")
@@ -80,6 +85,11 @@ verity_uuid=$(fmt "${usrhash:32:32}")
 
 rm -rf "$run/repart.d"; cp -a "$defs" "$run/repart.d"
 sed -i "s/@USR_UUID@/$usr_uuid/; s/@VERITY_UUID@/$verity_uuid/" "$run"/repart.d/*.conf
+# systemd-repart derives a UUID from the partition type when none is given,
+# which makes esp_a and esp_b identical; every other partition gets a fresh one.
+for f in "$run"/repart.d/*.conf; do
+    sed -i "s/@RANDOM_UUID@/$(systemd-id128 new -u)/" "$f"
+done
 
 echo "Partitioning $target ..."
 systemd-repart --dry-run=no --empty=force --definitions="$run/repart.d" \
