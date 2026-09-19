@@ -13,8 +13,6 @@
 # the answer.
 set -euo pipefail
 
-efivar=/sys/firmware/efi/efivars/LoaderDevicePartUUID-4a67b082-0a4c-41cf-b6c7-440b29bb8c4f
-
 entry_id() {  # bootname -> Boot#### id
     efibootmgr | sed -n "s/^Boot\([0-9A-F]\{4\}\)\*\{0,1\} $1\([[:space:]].*\)\{0,1\}\$/\1/p" | head -1
 }
@@ -27,14 +25,12 @@ slot_of_id() {  # Boot#### id -> bootname, if it is one of ours
 
 case ${1:-} in
 get-current)
-    [[ -r $efivar ]] || { echo "no LoaderDevicePartUUID" >&2; exit 1; }
-    booted=$(cat "$efivar" | tail -c +5 | iconv -f UTF-16LE -t UTF-8 | tr -d '\0' | tr 'A-Z' 'a-z')
-    disk=$(/usr/lib/jalea/system-disk)
-    label=$(lsblk -lno PARTUUID,PARTLABEL "$disk" | awk -v u="$booted" '$1==u{print $2}')
+    esp=$(/usr/lib/jalea/system-disk --esp)
+    label=$(blkid -p -o value -s PART_ENTRY_NAME "$esp")
     case $label in
     esp_a) echo A ;;
     esp_b) echo B ;;
-    *) echo "booted ESP $booted on $disk is neither esp_a nor esp_b (label '$label')" >&2; exit 1 ;;
+    *) echo "booted ESP $esp is neither esp_a nor esp_b (label '$label')" >&2; exit 1 ;;
     esac
     ;;
 get-primary)

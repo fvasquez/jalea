@@ -16,8 +16,8 @@ declare -A id
 
 for slot in A B; do
     label=esp_${slot,,}
-    part=$(lsblk -lno PATH,PARTLABEL "$disk" | awk -v l="$label" '$2==l{print $1}')
-    [[ -n $part ]] || { echo "partition $label not found on $disk, skipping $slot"; continue; }
+    part=$(/usr/lib/jalea/system-disk --label "$label" 2>/dev/null) \
+        || { echo "partition $label not found on $disk, skipping $slot"; continue; }
     num=$(cat "/sys/class/block/$(basename "$part")/partition")
 
     # Existing entry with this label?

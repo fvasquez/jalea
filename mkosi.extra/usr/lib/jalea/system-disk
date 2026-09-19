@@ -2,17 +2,20 @@
 # Identify the system disk: the one holding the ESP this UKI was loaded from,
 # which systemd-stub records in the LoaderDevicePartUUID EFI variable.
 #
-#   system-disk          print the disk, e.g. /dev/nvme0n1
-#   system-disk PART     exit 0 if partition PART (kernel name, e.g.
-#                        nvme0n1p4) lies on the system disk; used by udev
+#   system-disk                 print the disk, e.g. /dev/nvme0n1
+#   system-disk --esp           print the booted ESP partition, e.g. /dev/nvme0n1p1
+#   system-disk --label NAME    print the partition on the system disk whose
+#                               GPT name is NAME, e.g. esp_b
+#   system-disk PART            exit 0 if partition PART (kernel name, e.g.
+#                               nvme0n1p4) lies on the system disk; used by udev
 #
 # The installer stick is the same image as an installed system, so it carries
 # the same partition labels and, when it holds the build that is running, the
 # same usr/verity partition UUIDs. Anything that names a slot partition has to
 # be scoped to this disk, or it can land on the stick when one is inserted.
-# Partition UUIDs are read straight from the partition table (blkid -p), not
-# from udev's symlinks, because udev itself asks while it is still building
-# them.
+# Partition UUIDs and names are read straight from the partition table
+# (blkid -p), never from udev's database or symlinks: udev itself asks while
+# it is still building them, and early services run before it has finished.
 set -euo pipefail
 
 efivar=/sys/firmware/efi/efivars/LoaderDevicePartUUID-4a67b082-0a4c-41cf-b6c7-440b29bb8c4f
@@ -23,38 +26,58 @@ booted_esp() {
     cat "$efivar" | tail -c +5 | iconv -f UTF-16LE -t UTF-8 | tr -d '\0' | tr 'A-Z' 'a-z'
 }
 
-# Does the sysfs disk directory $1 hold a partition with GPT UUID $2?
-disk_has_partuuid() {
+# Print the partition in the sysfs disk directory $1 whose GPT field $2
+# (PART_ENTRY_UUID or PART_ENTRY_NAME) equals $3; fail if there is none.
+find_partition() {
     local p dev
     for p in "$1"/*/partition; do
         [[ -e $p ]] || continue
         dev=${p%/partition}; dev=/dev/${dev##*/}
-        [[ $(blkid -p -o value -s PART_ENTRY_UUID "$dev" 2>/dev/null) == "$2" ]] && return 0
+        if [[ $(blkid -p -o value -s "$2" "$dev" 2>/dev/null) == "$3" ]]; then
+            echo "$dev"
+            return 0
+        fi
     done
+    return 1
+}
+
+# Print the sysfs directory of the disk holding the booted ESP.
+system_disk_sys() {
+    local d
+    for d in /sys/class/block/*; do
+        [[ -e $d/partition ]] && continue           # partitions, not disks
+        [[ -d $d/device || -d $d/queue ]] || continue
+        if find_partition "$(readlink -f "$d")" PART_ENTRY_UUID "$booted" >/dev/null; then
+            readlink -f "$d"
+            return 0
+        fi
+    done
+    echo "no disk carries the booted ESP $booted" >&2
     return 1
 }
 
 booted=$(booted_esp) || { echo "no LoaderDevicePartUUID: not booted through systemd-stub" >&2; exit 1; }
 
-case $# in
-0)
-    for d in /sys/class/block/*; do
-        [[ -e $d/partition ]] && continue           # partitions, not disks
-        [[ -d $d/device || -d $d/queue ]] || continue
-        if disk_has_partuuid "$(readlink -f "$d")" "$booted"; then
-            echo "/dev/${d##*/}"
-            exit 0
-        fi
-    done
-    echo "no disk carries the booted ESP $booted" >&2
-    exit 1
+case ${1:-} in
+"")
+    sys=$(system_disk_sys) || exit 1
+    echo "/dev/${sys##*/}"
     ;;
-1)
-    [[ -e /sys/class/block/$1/partition ]] || exit 1
-    disk_has_partuuid "$(readlink -f "/sys/class/block/$1/..")" "$booted"
+--esp)
+    sys=$(system_disk_sys) || exit 1
+    find_partition "$sys" PART_ENTRY_UUID "$booted"
+    ;;
+--label)
+    [[ -n ${2:-} ]] || { echo "usage: $0 --label NAME" >&2; exit 1; }
+    sys=$(system_disk_sys) || exit 1
+    find_partition "$sys" PART_ENTRY_NAME "$2" || { echo "no partition named $2 on /dev/${sys##*/}" >&2; exit 1; }
+    ;;
+-*)
+    echo "usage: $0 [--esp | --label NAME | PARTITION]" >&2
+    exit 1
     ;;
 *)
-    echo "usage: $0 [PARTITION]" >&2
-    exit 1
+    [[ -e /sys/class/block/$1/partition ]] || exit 1
+    find_partition "$(readlink -f "/sys/class/block/$1/..")" PART_ENTRY_UUID "$booted" >/dev/null
     ;;
 esac
