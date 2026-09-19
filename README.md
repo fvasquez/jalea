@@ -142,7 +142,7 @@ On the device:
 
 ```sh
 sudo rauc status
-sudo rauc install https://github.com/fvasquez/jalea/releases/download/v<version>/jalea_<version>.raucb
+sudo rauc install https://github.com/fvasquez/jalea/releases/download/v0.1.0/jalea_0.1.0.raucb
 sudo reboot
 ```
 
@@ -193,9 +193,10 @@ Flakes and `nix-command` are enabled in `/etc/nix/nix.conf`. Members of
 ## Signing keys and releases
 
 Bundles are signed with an X.509 key. Locally, `scripts/gen-dev-keys.sh`
-makes a self-signed pair in `keys/`, and the certificate is baked into the
-image as `/etc/rauc/keyring.pem`, so a locally built device only accepts
-locally built bundles.
+makes a self-signed pair in `keys/`, and that certificate is baked into the
+image as `/etc/rauc/keyring.pem`. If `keys/release.crt` is present as well
+(the certificate attached to every GitHub Release), it is added to the
+keyring, so a locally built device also accepts published bundles.
 
 CI uses the `RAUC_KEY` repository secret (private key, PEM) and the
 `RAUC_CERT` repository variable (certificate, PEM). A push of a `v*` tag

@@ -1,14 +1,21 @@
 #!/bin/bash
-# Runs after package installation, outside the chroot. Puts the RAUC bundle
-# signing certificate into the image so the device trusts our bundles.
+# Runs after package installation, outside the chroot. Builds the RAUC
+# keyring the device trusts bundles against:
 #
-#   keys/rauc.crt   the certificate (public). In CI this comes from the
-#                   RAUC_CERT repository variable; locally from
-#                   scripts/gen-dev-keys.sh.
+#   keys/rauc.crt      always. In CI this is the RAUC_CERT repository
+#                      variable (the release certificate); locally it is the
+#                      throwaway certificate from scripts/gen-dev-keys.sh.
+#   keys/release.crt   if present, appended, so a locally built image also
+#                      accepts bundles published on GitHub Releases.
 set -euo pipefail
 cert="$SRCDIR/keys/rauc.crt"
 if [[ ! -f $cert ]]; then
     echo "mkosi.postinst: $cert not found; run scripts/gen-dev-keys.sh first" >&2
     exit 1
 fi
-install -D -m 0644 "$cert" "$BUILDROOT/usr/share/factory/etc/rauc/keyring.pem"
+keyring="$BUILDROOT/usr/share/factory/etc/rauc/keyring.pem"
+install -D -m 0644 "$cert" "$keyring"
+if [[ -f $SRCDIR/keys/release.crt ]] && ! cmp -s "$cert" "$SRCDIR/keys/release.crt"; then
+    cat "$SRCDIR/keys/release.crt" >> "$keyring"
+fi
+echo "mkosi.postinst: keyring holds $(grep -c 'BEGIN CERTIFICATE' "$keyring") certificate(s)"
