@@ -136,6 +136,12 @@ If you let the stick's default entry boot instead, you get a live Jalea
 whose encrypted root is created *on the stick*. That is a feature, not an
 accident.
 
+The installer has been exercised in QEMU up to and including the creation
+of the firmware entries; the first boot of an installed disk has so far only
+been reasoned about, because a `mkosi vm` session gets a fresh virtual TPM
+each time and OVMF does not enumerate a second virtio disk the way real
+firmware enumerates an NVMe. Real hardware is the test that counts here.
+
 ## Updates
 
 On the device:
@@ -163,6 +169,12 @@ which works even when the firmware booted via the fallback loader and
 
 Local builds can be installed the same way by serving `mkosi.output/` over
 HTTP, or by copying the bundle over and running `rauc install` on the file.
+
+If the new group cannot boot, the firmware falls back on its own: a UKI it
+cannot load is skipped for the next entry in `BootOrder`, and a UKI that
+loads but whose `/usr` fails verification makes the initrd reboot after
+systemd's 90-second device timeout (a drop-in in `mkosi.initrd.conf/`), with
+the same result. Both paths have been exercised in the VM.
 
 Nothing in `data` is part of a bundle. Rolling back to the previous group
 keeps your `/etc`, `/home` and Nix store exactly as they were; the store is
