@@ -27,7 +27,7 @@ slot-post-install)
     fmt=$(printf '%s' "$uuid" | sed -E 's/^(.{8})(.{4})(.{4})(.{4})(.{12})$/\1-\2-\3-\4-\5/')
     # RAUC passes the device as configured (a by-partlabel symlink); resolve it.
     part=$(readlink -f "$RAUC_SLOT_DEVICE")
-    disk=$(lsblk -no PKNAME "$part")
+    disk=$(lsblk -dno PKNAME "$part")
     num=$(cat "/sys/class/block/$(basename "$part")/partition")
     sfdisk --part-uuid "/dev/$disk" "$num" "$fmt"
     ;;

@@ -36,7 +36,7 @@ if [[ -n $boot_disk ]]; then
     usr_dm=$(basename "$(readlink -f "$(findmnt -no SOURCE /usr)")")
     for s in "/sys/class/block/$usr_dm"/slaves/*; do
         [[ -e $s ]] || continue
-        d=$(lsblk -no PKNAME "/dev/${s##*/}")
+        d=$(lsblk -dno PKNAME "/dev/${s##*/}")
         [[ $d == "$boot_disk" ]] || die "/usr is backed by /dev/${s##*/} on $d, not by the boot disk $boot_disk; refusing to install"
     done
 fi
