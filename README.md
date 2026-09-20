@@ -178,11 +178,12 @@ menu; leave it off to land in the menu. Both are one-shot, so the boot
 after that follows `BootOrder` again. `--no-reboot` sets everything up and
 leaves the reboot to you.
 
-The installer has been exercised in QEMU up to and including the creation
-of the firmware entries; the first boot of an installed disk has so far only
-been reasoned about, because a `mkosi vm` session gets a fresh virtual TPM
-each time and OVMF does not enumerate a second virtio disk the way real
-firmware enumerates an NVMe. Real hardware is the test that counts here.
+The installer, the first boot of the installed disk (TPM2 unlock included),
+an update streamed from a GitHub Release and a reinstall over an existing
+Jalea have all been exercised on an Intel NUC 13 Pro. In QEMU the installer
+can only be followed up to the creation of the firmware entries: a `mkosi
+vm` session gets a fresh virtual TPM each time and OVMF does not enumerate a
+second virtio disk the way real firmware enumerates an NVMe.
 
 ## Updates
 
