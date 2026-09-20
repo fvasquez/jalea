@@ -68,12 +68,18 @@ fi
 # --- Optionally preselect the installer in systemd-boot -----------------------
 if (( installer )); then
     var=/sys/firmware/efi/efivars/LoaderEntryOneShot-4a67b082-0a4c-41cf-b6c7-440b29bb8c4f
-    # 4 attribute bytes (NV+BS+RT), then the entry id as UTF-16LE with a NUL.
-    if { printf '\x07\x00\x00\x00'; printf 'jalea.efi@install' | iconv -f UTF-8 -t UTF-16LE; printf '\x00\x00'; } > "$var" 2>/dev/null; then
+    # systemd-boot matches this against its entry ids with a glob; the
+    # installer profile's id is jalea.efi@install. efivarfs wants the 4
+    # attribute bytes (NV+BS+RT) and the UTF-16LE value in one write, so
+    # assemble the blob first and write it with a single dd call.
+    blob=$(mktemp)
+    { printf '\x07\x00\x00\x00'; printf '*@install' | iconv -f UTF-8 -t UTF-16LE; printf '\x00\x00'; } > "$blob"
+    if dd if="$blob" of="$var" bs=4096 count=1 status=none 2>/dev/null; then
         echo "systemd-boot on the stick will start the installer directly"
     else
         echo "warning: could not set LoaderEntryOneShot; pick the installer in the menu" >&2
     fi
+    rm -f "$blob"
 fi
 
 efibootmgr --quiet --bootnext "$entry"
