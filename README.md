@@ -111,11 +111,29 @@ block-hash index for the usr and verity images, signed with `keys/rauc.key`.
 
 ## Install on hardware
 
-Write the disk image to a USB stick:
+You need a machine that boots UEFI and has a TPM2, a disk on it you can
+wipe, and a USB stick of 8 GB or more. Everything on the stick is erased.
+
+### User install
+
+Download `jalea_<version>.raw.zst` and `SHA256SUMS` from the
+[latest release](https://github.com/fvasquez/jalea/releases/latest), check
+the download and write it to the stick (`/dev/sdX` below):
+
+```sh
+sha256sum -c --ignore-missing SHA256SUMS
+zstd -dc jalea_<version>.raw.zst | sudo dd of=/dev/sdX bs=4M status=progress oflag=direct
+```
+
+### Dev install
+
+Write a local build instead:
 
 ```sh
 mkosi burn /dev/sdX          # or: dd if=mkosi.output/jalea_<version>.raw of=/dev/sdX bs=4M
 ```
+
+### Boot the stick
 
 Boot the stick with Secure Boot disabled. systemd-boot shows its menu for
 ten seconds; pick **Install Jalea to a disk**. The installer asks for the target disk, a
