@@ -7,5 +7,9 @@ ACTION=="remove", GOTO="jalea_system_disk_end"
 SUBSYSTEM!="block", GOTO="jalea_system_disk_end"
 ENV{DEVTYPE}!="partition", GOTO="jalea_system_disk_end"
 ENV{ID_PART_ENTRY_SCHEME}!="gpt", GOTO="jalea_system_disk_end"
-PROGRAM=="/usr/lib/jalea/system-disk %k", OPTIONS+="link_priority=100"
+PROGRAM=="/usr/lib/jalea/system-disk %k", OPTIONS+="link_priority=100", ENV{JALEA_SYSTEM_DISK}="1"
+# ... and get names of their own under /dev/jalea/ that no other disk can
+# claim, for the places where a race against the symlink priority would be
+# fatal (the installer's /usr verity devices).
+ENV{JALEA_SYSTEM_DISK}=="1", ENV{ID_PART_ENTRY_NAME}=="?*", SYMLINK+="jalea/$env{ID_PART_ENTRY_NAME}"
 LABEL="jalea_system_disk_end"

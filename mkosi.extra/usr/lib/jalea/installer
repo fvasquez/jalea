@@ -32,14 +32,17 @@ boot_disk=$(/usr/lib/jalea/system-disk 2>/dev/null | sed 's#^/dev/##' || true)
 # build has usr/verity partitions with the same GPT UUIDs, and if the initrd
 # had assembled /usr from those, repartitioning the target would pull the
 # source out from under the copy.
-if [[ -n $boot_disk ]]; then
-    usr_dm=$(basename "$(readlink -f "$(findmnt -no SOURCE /usr)")")
-    for s in "/sys/class/block/$usr_dm"/slaves/*; do
-        [[ -e $s ]] || continue
-        d=$(lsblk -dno PKNAME "/dev/${s##*/}")
-        [[ $d == "$boot_disk" ]] || die "/usr is backed by /dev/${s##*/} on $d, not by the boot disk $boot_disk; refusing to install"
-    done
-fi
+[[ -n $boot_disk ]] || die "cannot identify the boot disk (no LoaderDevicePartUUID from systemd-stub?)"
+usr_dm=$(basename "$(readlink -f "$(findmnt -no SOURCE /usr | head -1)")")
+usr_from=""
+for s in "/sys/class/block/$usr_dm"/slaves/*; do
+    [[ -e $s ]] || continue
+    d=$(lsblk -dno PKNAME "/dev/${s##*/}")
+    [[ $d == "$boot_disk" ]] || die "/usr is backed by /dev/${s##*/} on $d, not by the boot disk $boot_disk; refusing to install"
+    usr_from+="${usr_from:+ }${s##*/}"
+done
+[[ -n $usr_from ]] || die "cannot tell which partitions back /usr ($usr_dm)"
+echo "Booted from /dev/$boot_disk; /usr comes from $usr_from."
 
 mapfile -t disks < <(lsblk -dno NAME,TYPE | awk '$2=="disk"{print $1}' \
     | grep -vE '^(loop|sr|zram|ram|fd)' | grep -vx "${boot_disk:-__none__}")
@@ -55,6 +58,34 @@ for d in "${disks[@]}"; do [[ $d == nvme* ]] && { default=$d; break; }; done
 read -rp "Install to [/dev/$default]: " target
 target=${target:-/dev/$default}
 [[ -b $target ]] || die "$target is not a block device"
+
+# --- 1b. Nothing may hold the target's partitions open ----------------------
+# systemd-repart writes the new table first and only then asks the kernel to
+# reread it, which fails with EBUSY if any partition of the disk is open:
+# mounted, underneath a device-mapper device, or held by a process. Check
+# before anything is written, and say what holds it.
+tname=${target##*/}
+declare -A openby=()
+while read -r fddir link; do
+    pid=${fddir#/proc/}; pid=${pid%%/*}
+    openby[$link]+="${openby[$link]:+,}$pid($(cat "/proc/$pid/comm" 2>/dev/null))"
+done < <(find /proc/[0-9]*/fd -maxdepth 1 -type l -lname "/dev/$tname*" -printf '%h %l\n' 2>/dev/null)
+busy=0
+for p in "/sys/class/block/$tname"/*/partition; do
+    [[ -e $p ]] || continue
+    part=${p%/partition}; part=${part##*/}
+    why=""
+    holders=$(ls "/sys/class/block/$part/holders" 2>/dev/null | paste -sd, -)
+    [[ -n $holders ]] && why+=" under device-mapper ($holders)"
+    mnt=$(findmnt -rno TARGET "/dev/$part" 2>/dev/null | paste -sd, -)
+    [[ -n $mnt ]] && why+=" mounted at $mnt"
+    [[ -n ${openby[/dev/$part]:-} ]] && why+=" open by ${openby[/dev/$part]}"
+    if [[ -n $why ]]; then
+        echo "/dev/$part is in use:$why"
+        busy=1
+    fi
+done
+(( busy )) && die "$target is in use; refusing to repartition it"
 
 # --- 2. Identity ------------------------------------------------------------
 read -rp "Hostname [jalea]: " hostname
