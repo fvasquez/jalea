@@ -75,9 +75,11 @@ for p in "/sys/class/block/$tname"/*/partition; do
     [[ -e $p ]] || continue
     part=${p%/partition}; part=${part##*/}
     why=""
-    holders=$(ls "/sys/class/block/$part/holders" 2>/dev/null | paste -sd, -)
+    # findmnt exits 1 for a partition that is not mounted (the normal case);
+    # under pipefail that must not end the script.
+    holders=$({ ls "/sys/class/block/$part/holders" 2>/dev/null || true; } | paste -sd, -)
     [[ -n $holders ]] && why+=" under device-mapper ($holders)"
-    mnt=$(findmnt -rno TARGET "/dev/$part" 2>/dev/null | paste -sd, -)
+    mnt=$({ findmnt -rno TARGET "/dev/$part" 2>/dev/null || true; } | paste -sd, -)
     [[ -n $mnt ]] && why+=" mounted at $mnt"
     [[ -n ${openby[/dev/$part]:-} ]] && why+=" open by ${openby[/dev/$part]}"
     if [[ -n $why ]]; then
