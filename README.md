@@ -144,6 +144,18 @@ If you let the stick's default entry boot instead, you get a live Jalea
 whose encrypted root is created *on the stick*. That is a feature, not an
 accident.
 
+To reinstall a machine that already runs Jalea, you do not need to catch
+the firmware's boot menu. Insert the stick and run
+
+```sh
+sudo jalea-boot-stick --installer
+```
+
+It finds the stick, makes sure the firmware has a boot entry for its ESP,
+sets `BootNext` to it and reboots; `--installer` also tells systemd-boot on
+the stick to start the installer instead of showing its menu. Both are
+one-shot, so the boot after that follows `BootOrder` again.
+
 The installer has been exercised in QEMU up to and including the creation
 of the firmware entries; the first boot of an installed disk has so far only
 been reasoned about, because a `mkosi vm` session gets a fresh virtual TPM

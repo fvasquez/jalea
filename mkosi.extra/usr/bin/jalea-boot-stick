@@ -1,0 +1,86 @@
+#!/bin/bash
+# Reboot into an inserted Jalea USB stick, without firmware hotkeys.
+#
+#   jalea-boot-stick [--installer] [--no-reboot]
+#
+# Finds a disk other than the system disk that carries a Jalea image (a
+# partition named esp_a), makes sure the firmware has a boot entry for its
+# ESP, points BootNext at it and reboots. With --installer, systemd-boot on
+# the stick is also told to skip its menu and start the installer profile.
+# Both are one-shot: the next boot after that follows BootOrder as usual.
+set -euo pipefail
+
+die() { echo "error: $*" >&2; exit 1; }
+usage() { echo "usage: $0 [--installer] [--no-reboot]" >&2; exit 1; }
+
+installer=0 reboot=1
+for arg in "$@"; do
+    case $arg in
+    --installer) installer=1 ;;
+    --no-reboot) reboot=0 ;;
+    *) usage ;;
+    esac
+done
+(( EUID == 0 )) || die "run as root"
+[[ -d /sys/firmware/efi/efivars ]] || die "not an EFI system"
+
+# --- Find the stick ----------------------------------------------------------
+system=$(/usr/lib/jalea/system-disk) || die "cannot identify the system disk"
+stick="" esp=""
+for d in /sys/class/block/*; do
+    [[ -e $d/partition ]] && continue
+    [[ -d $d/device ]] || continue
+    dev=/dev/${d##*/}
+    [[ $dev == "$system" ]] && continue
+    for p in "$d"/*/partition; do
+        [[ -e $p ]] || continue
+        part=${p%/partition}; part=/dev/${part##*/}
+        if [[ $(blkid -p -o value -s PART_ENTRY_NAME "$part" 2>/dev/null) == esp_a ]]; then
+            stick=$dev esp=$part
+            break 2
+        fi
+    done
+done
+[[ -n $stick ]] || die "no Jalea stick found: no disk other than $system has an esp_a partition"
+uuid=$(blkid -p -o value -s PART_ENTRY_UUID "$esp" | tr 'A-Z' 'a-z')
+num=$(cat "/sys/class/block/${esp##*/}/partition")
+echo "Jalea stick: $stick (ESP $esp)"
+
+# --- Firmware entry for its ESP ----------------------------------------------
+# The firmware usually adds one by itself ("UEFI OS") while the stick is in
+# during POST. If it has not, create one under our own label without
+# disturbing BootOrder (efibootmgr --create would put it first).
+entry=$(efibootmgr -v | sed -n "s/^Boot\([0-9A-F]\{4\}\)\*\{0,1\} .*HD([0-9]*,GPT,$uuid,.*/\1/Ip" | head -1)
+if [[ -z $entry ]]; then
+    order=$(efibootmgr | sed -n 's/^BootOrder: //p')
+    for old in $(efibootmgr | sed -n 's/^Boot\([0-9A-F]\{4\}\)\*\{0,1\} Jalea stick$/\1/p'); do
+        efibootmgr --quiet --delete-bootnum --bootnum "$old"
+    done
+    efibootmgr --quiet --create --disk "$stick" --part "$num" --label "Jalea stick" --loader '\EFI\BOOT\BOOTX64.EFI'
+    [[ -n $order ]] && efibootmgr --quiet --bootorder "$order"
+    entry=$(efibootmgr | sed -n 's/^Boot\([0-9A-F]\{4\}\)\*\{0,1\} Jalea stick$/\1/p' | head -1)
+    [[ -n $entry ]] || die "failed to create a firmware entry for $esp"
+    echo "created firmware entry Boot$entry for it"
+else
+    echo "firmware entry: Boot$entry"
+fi
+
+# --- Optionally preselect the installer in systemd-boot -----------------------
+if (( installer )); then
+    var=/sys/firmware/efi/efivars/LoaderEntryOneShot-4a67b082-0a4c-41cf-b6c7-440b29bb8c4f
+    # 4 attribute bytes (NV+BS+RT), then the entry id as UTF-16LE with a NUL.
+    if { printf '\x07\x00\x00\x00'; printf 'jalea.efi@install' | iconv -f UTF-8 -t UTF-16LE; printf '\x00\x00'; } > "$var" 2>/dev/null; then
+        echo "systemd-boot on the stick will start the installer directly"
+    else
+        echo "warning: could not set LoaderEntryOneShot; pick the installer in the menu" >&2
+    fi
+fi
+
+efibootmgr --quiet --bootnext "$entry"
+echo "BootNext set to Boot$entry"
+if (( reboot )); then
+    echo "Rebooting ..."
+    systemctl reboot
+else
+    echo "Reboot when ready."
+fi
