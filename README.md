@@ -115,7 +115,7 @@ block-hash index for the usr and verity images, signed with `keys/rauc.key`.
 You need a machine that boots UEFI and has a TPM2, a disk on it you can
 wipe, and a USB stick of 8 GB or more. Everything on the stick is erased.
 
-### User install
+### Flash release image to USB stick
 
 Download `jalea_<version>.raw.zst` and `SHA256SUMS` from the
 [latest release](https://github.com/fvasquez/jalea/releases/latest), check
