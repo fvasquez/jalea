@@ -126,7 +126,7 @@ sha256sum -c --ignore-missing SHA256SUMS
 zstd -dc jalea_<version>.raw.zst | sudo dd of=/dev/sdX bs=4M status=progress oflag=direct
 ```
 
-### Dev install
+### Flash dev image to USB stick
 
 Write a local build instead:
 
