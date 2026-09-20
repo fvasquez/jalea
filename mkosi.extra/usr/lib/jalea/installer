@@ -107,8 +107,17 @@ fmt() { sed -E 's/^(.{8})(.{4})(.{4})(.{4})(.{12})$/\1-\2-\3-\4-\5/' <<<"$1"; }
 usr_uuid=$(fmt "${usrhash:0:32}")
 verity_uuid=$(fmt "${usrhash:32:32}")
 
+# The block sources are the stick's own partitions, named explicitly.
+# CopyBlocks=auto would find them through the /usr and /efi mounts, but the
+# ESP is an automount that goes away after two idle minutes and repart's
+# lookup does not bring it back, so a slow pass through the prompts failed.
+esp_src=$(/usr/lib/jalea/system-disk --label esp_a) || die "no esp_a on the boot disk"
+usr_src=$(/usr/lib/jalea/system-disk --label usr_a) || die "no usr_a on the boot disk"
+verity_src=$(/usr/lib/jalea/system-disk --label verity_a) || die "no verity_a on the boot disk"
+
 rm -rf "$run/repart.d"; cp -a "$defs" "$run/repart.d"
 sed -i "s/@USR_UUID@/$usr_uuid/; s/@VERITY_UUID@/$verity_uuid/" "$run"/repart.d/*.conf
+sed -i "s#@ESP_SRC@#$esp_src#; s#@USR_SRC@#$usr_src#; s#@VERITY_SRC@#$verity_src#" "$run"/repart.d/*.conf
 # systemd-repart derives a UUID from the partition type when none is given,
 # which makes esp_a and esp_b identical; every other partition gets a fresh one.
 for f in "$run"/repart.d/*.conf; do
