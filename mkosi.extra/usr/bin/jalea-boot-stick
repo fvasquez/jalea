@@ -53,12 +53,12 @@ echo "Jalea stick: $stick (ESP $esp)"
 entry=$(efibootmgr -v | sed -n "s/^Boot\([0-9A-F]\{4\}\)\*\{0,1\} .*HD([0-9]*,GPT,$uuid,.*/\1/Ip" | head -1)
 if [[ -z $entry ]]; then
     order=$(efibootmgr | sed -n 's/^BootOrder: //p')
-    for old in $(efibootmgr | sed -n 's/^Boot\([0-9A-F]\{4\}\)\*\{0,1\} Jalea stick$/\1/p'); do
+    for old in $(efibootmgr | sed -n 's/^Boot\([0-9A-F]\{4\}\)\*\{0,1\} Jalea stick\([[:space:]].*\)\{0,1\}$/\1/p'); do
         efibootmgr --quiet --delete-bootnum --bootnum "$old"
     done
     efibootmgr --quiet --create --disk "$stick" --part "$num" --label "Jalea stick" --loader '\EFI\BOOT\BOOTX64.EFI'
     [[ -n $order ]] && efibootmgr --quiet --bootorder "$order"
-    entry=$(efibootmgr | sed -n 's/^Boot\([0-9A-F]\{4\}\)\*\{0,1\} Jalea stick$/\1/p' | head -1)
+    entry=$(efibootmgr | sed -n 's/^Boot\([0-9A-F]\{4\}\)\*\{0,1\} Jalea stick\([[:space:]].*\)\{0,1\}$/\1/p' | head -1)
     [[ -n $entry ]] || die "failed to create a firmware entry for $esp"
     echo "created firmware entry Boot$entry for it"
 else
