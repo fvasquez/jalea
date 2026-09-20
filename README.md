@@ -28,8 +28,9 @@ installed), and Nix, which keeps everything in a content-addressed
 * **A/B updates with [RAUC](https://rauc.io/)**: two complete slot groups,
   streamed straight from a GitHub Release with adaptive block-level
   downloads, and a firmware-level fallback if the new group fails to boot.
-* A **USB installer** for real hardware. Developed on an Intel NUC 13 Pro;
-  anything that boots UEFI with a TPM2 should work.
+* A **USB installer** for real hardware, and `jalea-boot-stick` to reboot a
+  running Jalea straight into it. Developed on an Intel NUC 13 Pro; anything
+  that boots UEFI with a TPM2 should work.
 
 Jalea is the Peruvian platter of fried seafood: many things, one plate.
 
@@ -162,17 +163,20 @@ If you let the stick's default entry boot instead, you get a live Jalea
 whose encrypted root is created *on the stick*. That is a feature, not an
 accident.
 
-To reinstall a machine that already runs Jalea, you do not need to catch
-the firmware's boot menu. Insert the stick and run
+### Reinstall from a running Jalea
+
+No firmware hotkeys needed. Insert the stick and run:
 
 ```sh
 sudo jalea-boot-stick --installer
 ```
 
-It finds the stick, makes sure the firmware has a boot entry for its ESP,
-sets `BootNext` to it and reboots; `--installer` also tells systemd-boot on
-the stick to start the installer instead of showing its menu. Both are
-one-shot, so the boot after that follows `BootOrder` again.
+`jalea-boot-stick` finds the stick, makes sure the firmware has a boot entry
+for its ESP, sets `BootNext` to it and reboots. `--installer` also tells
+systemd-boot on the stick to start the installer instead of showing its
+menu; leave it off to land in the menu. Both are one-shot, so the boot
+after that follows `BootOrder` again. `--no-reboot` sets everything up and
+leaves the reboot to you.
 
 The installer has been exercised in QEMU up to and including the creation
 of the firmware entries; the first boot of an installed disk has so far only
