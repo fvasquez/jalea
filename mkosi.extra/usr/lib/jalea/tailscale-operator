@@ -1,0 +1,24 @@
+#!/bin/bash
+# Once per data volume: let the first account (uid 1000, the one the
+# installer or the dev VM creates) drive tailscale without sudo. Operator
+# rights are a preference in tailscaled's state, so only the running daemon
+# can set them; hence a service, not the installer. Later changes by hand are
+# left alone: the stamp file keeps this from running again.
+set -euo pipefail
+stamp=/var/lib/tailscale/jalea-operator
+user=$(getent passwd 1000 | cut -d: -f1 || true)
+if [[ -z $user ]]; then
+    echo "tailscale-operator: no account with uid 1000, nothing to do"
+    exit 0
+fi
+# tailscaled's socket may not be up the moment the unit is active.
+for _ in 1 2 3 4 5; do
+    if tailscale set --operator="$user"; then
+        touch "$stamp"
+        echo "tailscale-operator: $user may use tailscale without sudo"
+        exit 0
+    fi
+    sleep 2
+done
+echo "tailscale-operator: could not reach tailscaled" >&2
+exit 1

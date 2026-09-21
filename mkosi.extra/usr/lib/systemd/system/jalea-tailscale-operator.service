@@ -1,0 +1,13 @@
+[Unit]
+Description=Let the first account use tailscale without sudo
+Documentation=https://github.com/fvasquez/jalea
+ConditionPathExists=!/var/lib/tailscale/jalea-operator
+After=tailscaled.service
+Requires=tailscaled.service
+
+[Service]
+Type=oneshot
+ExecStart=/usr/lib/jalea/tailscale-operator
+
+[Install]
+WantedBy=multi-user.target

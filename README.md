@@ -166,6 +166,11 @@ Networking is systemd-networkd with DHCP on wired and wireless interfaces
 and iwd for Wi-Fi. To join another network later, use `iwctl`; iwd remembers
 it under `/var/lib/iwd`, which is on the encrypted volume.
 
+Tailscale is installed and its daemon runs from the first boot. The account
+the installer created may drive it without `sudo`. Join your tailnet once
+with `tailscale up`; the node key lives in `/var/lib/tailscale`, on the
+encrypted volume, so it survives updates.
+
 If you let the stick's default entry boot instead, you get a live Jalea
 whose encrypted root is created *on the stick*. That is a feature, not an
 accident.
@@ -282,13 +287,14 @@ mkosi.conf              image definition
 mkosi.repart/           partition table of the built image (A populated, B empty)
 mkosi.uki-profiles/     the "Install" boot entry
 mkosi.profiles/dev/     SSH over vsock for development VMs
+mkosi.sandbox/          Tailscale's apt repository and key, for the build only
 mkosi.credentials/      dev VM account and autologin (never in the image)
 mkosi.prepare           installs Helix, the default editor, from upstream
 mkosi.finalize          captures the factory /etc, generates sysusers.d
 mkosi.postinst          bakes the RAUC certificate into the image
 mkosi.extra/            files added to the image
   usr/lib/repart.d/     the encrypted root, created on the device
-  usr/lib/jalea/        installer, boot-entry repair, RAUC backend, nix-daemon wrapper, snapper setup
+  usr/lib/jalea/        installer, boot-entry repair, RAUC backend, nix-daemon wrapper, snapper and tailscale setup
   usr/share/factory/etc RAUC, Nix and zsh configuration
 rauc/                   bundle manifest template and install hook
 scripts/                dev keys, bundle build

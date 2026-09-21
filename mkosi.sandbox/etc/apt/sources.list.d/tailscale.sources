@@ -1,0 +1,9 @@
+# Tailscale's own repository, read by apt inside the mkosi build sandbox
+# only; it is not part of the image. The key is the one Tailscale publishes
+# at https://pkgs.tailscale.com/stable/debian/trixie.asc, fingerprint
+# 2596 A99E AAB3 3821 893C 0A79 458C A832 957F 5868.
+Types: deb
+URIs: https://pkgs.tailscale.com/stable/debian
+Suites: trixie
+Components: main
+Signed-By: /etc/apt/keyrings/tailscale.asc
