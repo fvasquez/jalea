@@ -17,6 +17,9 @@ disable apt-daily-upgrade.timer
 disable e2scrub_all.timer
 disable fstrim.timer
 disable rauc-mark-good.service
+# smartmontools is here for smartctl; smartd would poll the NVMe and try to
+# mail root about it.
+disable smartmontools.service
 # systemd-pcrlock is experimental and fails without a Secure Boot database;
 # the LUKS root is bound to PCR 7 directly instead.
 disable systemd-pcrlock-*.service
