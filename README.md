@@ -276,6 +276,7 @@ mkosi.repart/           partition table of the built image (A populated, B empty
 mkosi.uki-profiles/     the "Install" boot entry
 mkosi.profiles/dev/     SSH over vsock for development VMs
 mkosi.credentials/      dev VM account and autologin (never in the image)
+mkosi.prepare           installs Helix, the default editor, from upstream
 mkosi.finalize          captures the factory /etc, generates sysusers.d
 mkosi.postinst          bakes the RAUC certificate into the image
 mkosi.extra/            files added to the image

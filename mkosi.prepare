@@ -1,0 +1,40 @@
+#!/bin/bash
+# Runs right after the Debian packages are installed, outside the chroot and
+# with network access. $BUILDROOT is the image tree. Installs Helix, Jalea's
+# default editor, from upstream's release tarball, because Debian does not
+# package it. The tarball is kept in mkosi.cache/ and checked against a
+# pinned SHA-256, so later builds are offline. Bump both lines to update.
+set -euo pipefail
+[[ ${1:-} == final ]] || exit 0
+
+version=25.07.1
+sha256=3f08e63ecd388fff657ad39722f88bb03dcf326f1f2da2700d99e1dc40ab2e8b
+name="helix-$version-x86_64-linux"
+tarball="$SRCDIR/mkosi.cache/$name.tar.xz"
+
+mkdir -p "$SRCDIR/mkosi.cache"
+if ! echo "$sha256  $tarball" | sha256sum --check --status 2>/dev/null; then
+    curl --fail --location --silent --show-error --output "$tarball.part" \
+        "https://github.com/helix-editor/helix/releases/download/$version/$name.tar.xz"
+    echo "$sha256  $tarball.part" | sha256sum --check --status
+    mv "$tarball.part" "$tarball"
+fi
+
+# hx finds its runtime/ next to the real binary (it resolves /proc/self/exe,
+# so the /usr/bin symlink is fine); ~/.config/helix/runtime can override it.
+lib="$BUILDROOT/usr/lib/helix"
+rm -rf "$lib"
+mkdir -p "$lib"
+tar --extract --xz --file "$tarball" --directory "$lib" --strip-components=1 \
+    --no-same-owner --no-same-permissions "$name/hx" "$name/runtime"
+ln -sf ../lib/helix/hx "$BUILDROOT/usr/bin/hx"
+
+tar --extract --xz --file "$tarball" --to-stdout "$name/contrib/completion/hx.bash" \
+    | install -D -m 0644 /dev/stdin "$BUILDROOT/usr/share/bash-completion/completions/hx"
+tar --extract --xz --file "$tarball" --to-stdout "$name/contrib/completion/hx.zsh" \
+    | install -D -m 0644 /dev/stdin "$BUILDROOT/usr/share/zsh/vendor-completions/_hx"
+
+# Make it the system editor (sensible-editor, sudoedit, ...): nano registers
+# with priority 40, so 100 wins.
+mkosi-chroot update-alternatives --install /usr/bin/editor editor /usr/bin/hx 100
+echo "mkosi.prepare: installed helix $version as /usr/bin/hx and the editor alternative"
