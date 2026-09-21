@@ -1,0 +1,19 @@
+[Unit]
+Description=Create the snapper configs for / and /home
+Documentation=https://github.com/fvasquez/jalea
+# /etc is populated from the factory tree by systemd-tmpfiles; the configs
+# go next to it. Debian starts snapperd from sysinit.target and the daemon
+# reads the list of configs once, at startup, so the configs must exist
+# before it (hence no default dependencies), and before the first boot
+# snapshot.
+DefaultDependencies=no
+After=systemd-tmpfiles-setup.service local-fs.target
+Before=snapperd.service snapper-boot.service snapper-timeline.service snapper-cleanup.service
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+ExecStart=/usr/lib/jalea/snapper-setup
+
+[Install]
+WantedBy=multi-user.target

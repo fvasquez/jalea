@@ -58,6 +58,11 @@ Your edits persist; new defaults from a new image version appear on their own.
 Accounts that Debian packages created at build time are re-created by
 systemd-sysusers from a generated `sysusers.d` file, with the same IDs.
 
+snapper keeps btrfs snapshots of `/` (so `/etc`) and `/home`: one at every
+boot, one every hour, thinned to a day of hourlies, a week of dailies and a
+month of weeklies. `snapper list` shows them, `snapper undochange` and
+`snapper rollback` use them. `/var` and `/nix` are not snapshotted.
+
 ## Build
 
 You need mkosi 27 or newer. Upstream's recommended way:
@@ -281,7 +286,7 @@ mkosi.finalize          captures the factory /etc, generates sysusers.d
 mkosi.postinst          bakes the RAUC certificate into the image
 mkosi.extra/            files added to the image
   usr/lib/repart.d/     the encrypted root, created on the device
-  usr/lib/jalea/        installer, boot-entry repair, RAUC backend, nix-daemon wrapper
+  usr/lib/jalea/        installer, boot-entry repair, RAUC backend, nix-daemon wrapper, snapper setup
   usr/share/factory/etc RAUC and Nix configuration
 rauc/                   bundle manifest template and install hook
 scripts/                dev keys, bundle build

@@ -1,0 +1,37 @@
+# Snapper template for Jalea's data volume, used by jalea-snapper-setup for
+# the "root" (/) and "home" (/home) configs. See snapper-configs(5).
+# SUBVOLUME and FSTYPE are filled in by "snapper create-config".
+SUBVOLUME=""
+FSTYPE="btrfs"
+QGROUP=""
+
+# Delete old snapshots when they use more than half the volume or free space
+# drops under a fifth.
+SPACE_LIMIT="0.5"
+FREE_LIMIT="0.2"
+
+ALLOW_USERS=""
+ALLOW_GROUPS=""
+SYNC_ACL="no"
+BACKGROUND_COMPARISON="yes"
+
+# "number" snapshots: the boot snapshots snapper-boot.timer takes of /, and
+# anything created by hand with --cleanup-algorithm number.
+NUMBER_CLEANUP="yes"
+NUMBER_MIN_AGE="1800"
+NUMBER_LIMIT="20"
+NUMBER_LIMIT_IMPORTANT="5"
+
+# Timeline: a snapshot every hour (snapper-timeline.timer), thinned to a day
+# of hourlies, a week of dailies and a month of weeklies.
+TIMELINE_CREATE="yes"
+TIMELINE_CLEANUP="yes"
+TIMELINE_MIN_AGE="1800"
+TIMELINE_LIMIT_HOURLY="24"
+TIMELINE_LIMIT_DAILY="7"
+TIMELINE_LIMIT_WEEKLY="4"
+TIMELINE_LIMIT_MONTHLY="0"
+TIMELINE_LIMIT_YEARLY="0"
+
+EMPTY_PRE_POST_CLEANUP="yes"
+EMPTY_PRE_POST_MIN_AGE="1800"

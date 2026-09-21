@@ -7,6 +7,7 @@ enable ssh.service
 enable rauc.service
 enable jalea-efi-entries.service
 enable jalea-mark-good.service
+enable jalea-snapper-setup.service
 enable nix-daemon.socket
 enable nix-daemon.service
 enable nix-upgrade.service

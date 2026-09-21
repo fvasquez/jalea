@@ -1,0 +1,22 @@
+#!/bin/bash
+# Creates the snapper configs for the data volume, once per volume. Each
+# config is a file in /etc/snapper/configs (which starts empty on a fresh
+# volume) plus a .snapshots subvolume inside the subvolume it covers.
+#
+#   root  /      /etc, /root, /srv, /opt. The nested subvolumes (/var, /home,
+#                /nix) are not part of a snapshot of /.
+#   home  /home  the users' data.
+#
+# /var (journal and caches, mostly churn) and /nix (reproducible, and a
+# snapshot would pin store paths the garbage collector has deleted) are
+# left alone.
+set -euo pipefail
+for cfg in root:/ home:/home; do
+    name=${cfg%%:*}
+    subvolume=${cfg#*:}
+    if [[ -e /etc/snapper/configs/$name ]]; then
+        continue
+    fi
+    snapper --no-dbus --config "$name" create-config --template jalea "$subvolume"
+    echo "snapper-setup: created config $name for $subvolume"
+done
