@@ -199,13 +199,14 @@ second virtio disk the way real firmware enumerates an NVMe.
 
 ## Updates
 
-On the device:
-
-```sh
-sudo rauc status
-sudo rauc install https://github.com/fvasquez/jalea/releases/download/v0.1.0/jalea_0.1.0.raucb
-sudo reboot
-```
+Updates are automatic. Once a day `jalea-update.timer` asks GitHub for the
+latest release and, if it is newer than the running image, streams its
+bundle into the inactive slot group. Nothing reboots: RAUC has already
+pointed the firmware at the new group, so it takes effect on the next
+reboot, and the login banner says so until then. `sudo systemctl start
+jalea-update` checks right now; `sudo rauc status` shows the slot groups.
+`systemctl mask --now jalea-update.timer` turns it off (`disable` is undone
+at the next boot by the factory `/etc` merge).
 
 RAUC streams the bundle over HTTPS (no local copy), and with the block-hash
 index it fetches only blocks that differ from the running slot group. The
@@ -232,16 +233,9 @@ symlinks, so RAUC's slots and the initrd's `/usr` lookup resolve to the
 right disk even with a stick inserted; `/usr/lib/jalea/system-disk` is the
 helper behind it. Still, take the stick out when you are not installing.
 
-Updates are also automatic. Once a day `jalea-update.timer` asks GitHub for
-the latest release and, if it is newer than the running image, streams its
-bundle into the inactive group. Nothing reboots: RAUC has already pointed
-the firmware at the new group, so it takes effect on the next reboot, and
-the login banner says so until then. `systemctl mask --now jalea-update.timer`
-turns it off (`disable` is undone at the next boot by the factory `/etc`
-merge). `sudo systemctl start jalea-update` checks right now.
-
-Local builds can be installed the same way by serving `mkosi.output/` over
-HTTP, or by copying the bundle over and running `rauc install` on the file.
+Local builds go the same way by hand: serve `mkosi.output/` over HTTP (with
+range requests; Python's `http.server` lacks them) or copy the bundle over,
+then `sudo rauc install <url or file>` and reboot.
 
 If the new group cannot boot, the firmware falls back on its own: a UKI it
 cannot load is skipped for the next entry in `BootOrder`, and a UKI that
