@@ -255,7 +255,7 @@ you talk to is current Nix, not the one Debian froze. From then on:
 ```sh
 nix profile install nixpkgs#htop
 nix run nixpkgs#cowsay -- hello
-nix shell nixpkgs#python3
+nix shell nixpkgs#python3Packages.requests
 ```
 
 Flakes and `nix-command` are enabled in `/etc/nix/nix.conf`. Members of
