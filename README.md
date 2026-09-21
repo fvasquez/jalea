@@ -26,8 +26,13 @@ installed), and Nix, which keeps everything in a content-addressed
 * **Nix** from Debian's own archive as the seed; it then installs the current
   Nix from nixpkgs and runs on that.
 * **A/B updates with [RAUC](https://rauc.io/)**: two complete slot groups,
-  streamed straight from a GitHub Release with adaptive block-level
-  downloads, and a firmware-level fallback if the new group fails to boot.
+  a daily check that streams a new GitHub Release straight into the idle
+  group with adaptive block-level downloads, no reboot until you choose,
+  and a firmware-level fallback if the new group fails to boot.
+* **Zsh** as the login shell and **[Helix](https://helix-editor.com/)** as
+  the editor, out of the box.
+* **[Tailscale](https://tailscale.com/)** built in: one `tailscale up` and
+  the machine is on your tailnet.
 * A **USB installer** for real hardware, and `jalea-boot-stick` to reboot a
   running Jalea straight into it. Developed on an Intel NUC 13 Pro; anything
   that boots UEFI with a TPM2 should work.
@@ -60,8 +65,15 @@ systemd-sysusers from a generated `sysusers.d` file, with the same IDs.
 
 snapper keeps btrfs snapshots of `/` (so `/etc`) and `/home`: one at every
 boot, one every hour, thinned to a day of hourlies, a week of dailies and a
-month of weeklies. `snapper list` shows them, `snapper undochange` and
-`snapper rollback` use them. `/var` and `/nix` are not snapshotted.
+month of weeklies. `/var` and `/nix` are not snapshotted.
+
+```sh
+sudo snapper -c root list                    # snapshots of / (root config)
+sudo snapper -c root status 3..0             # what changed since snapshot 3
+sudo snapper -c root diff 3..0 /etc/hostname # the change itself
+sudo snapper -c root undochange 3..0 /etc/hostname
+sudo snapper -c home list                    # same for /home (home config)
+```
 
 ## Build
 
@@ -203,50 +215,32 @@ Updates are automatic. Once a day `jalea-update.timer` asks GitHub for the
 latest release and, if it is newer than the running image, streams its
 bundle into the inactive slot group. Nothing reboots: RAUC has already
 pointed the firmware at the new group, so it takes effect on the next
-reboot, and the login banner says so until then. `sudo jalea-update` runs
-the same check right now, `jalea-update --check` only reports, and
-`sudo rauc status` shows the slot groups.
-`systemctl mask --now jalea-update.timer` turns it off (`disable` is undone
-at the next boot by the factory `/etc` merge).
+reboot, and the login banner says so until then.
 
-RAUC streams the bundle over HTTPS (no local copy), and with the block-hash
-index it fetches only blocks that differ from the running slot group. The
-images land in the inactive group; a post-install hook stamps the partition
-UUIDs derived from the new root hash so the new UKI can find them. RAUC then
-sets the firmware's `BootNext` to the new group. If that boot succeeds,
-`jalea-mark-good.service` moves it to the front of `BootOrder`; if it does
-not, the firmware falls back to the previous group by itself.
+```sh
+jalea-update --check                      # is there a newer release?
+sudo jalea-update                         # install it now, into the idle group
+sudo rauc status                          # which group is booted, which is next
+sudo reboot                               # switch to the new group
+sudo systemctl mask --now jalea-update.timer   # turn the daily check off
+```
 
-RAUC's slot switching goes through `/usr/lib/jalea/rauc-bootloader`, a small
-custom backend with the same BootNext/BootOrder semantics as RAUC's built-in
-EFI backend. The difference is how it tells which group is running: from the
-ESP that systemd-stub reports it was loaded from (`LoaderDevicePartUUID`),
-which works even when the firmware booted via the fallback loader and
-`BootCurrent` names no slot.
-
-That booted ESP also defines the *system disk*, and everything that names a
-slot partition is scoped to it. The installer stick is the same image as an
-installed system, so it carries the same partition labels, and when it holds
-the build that is running, the same usr/verity partition UUIDs. A udev rule
-(`61-jalea-system-disk.rules`, in the initrd too) gives the system disk's
-partitions priority for the `/dev/disk/by-partlabel` and `by-partuuid`
-symlinks, so RAUC's slots and the initrd's `/usr` lookup resolve to the
-right disk even with a stick inserted; `/usr/lib/jalea/system-disk` is the
-helper behind it. Still, take the stick out when you are not installing.
+`systemctl disable` would not stick: the factory `/etc` merge re-enables
+the timer at the next boot, so masking is the way to turn it off.
 
 Local builds go the same way by hand: serve `mkosi.output/` over HTTP (with
-range requests; Python's `http.server` lacks them) or copy the bundle over,
-then `sudo rauc install <url or file>` and reboot.
+range requests; Python's `http.server` lacks them) or copy the bundle over.
 
-If the new group cannot boot, the firmware falls back on its own: a UKI it
-cannot load is skipped for the next entry in `BootOrder`, and a UKI that
-loads but whose `/usr` fails verification makes the initrd reboot after
-systemd's 90-second device timeout (a drop-in in `mkosi.initrd.conf/`), with
-the same result. Both paths have been exercised in the VM.
+```sh
+sudo rauc install http://build-host:8000/jalea_0.1.7-3-gabc1234.raucb
+sudo rauc install /home/jalea/jalea_0.1.7-3-gabc1234.raucb
+sudo reboot
+```
 
-Nothing in `data` is part of a bundle. Rolling back to the previous group
-keeps your `/etc`, `/home` and Nix store exactly as they were; the store is
-content-addressed, so a base rollback cannot invalidate it.
+If the new group fails to boot, the firmware falls back to the previous one
+on its own. Nothing in `data` is part of a bundle: `/etc`, `/home` and the
+Nix store stay exactly as they were, whichever group boots. The mechanics
+are in [How updates work](#how-updates-work).
 
 ## Nix
 
@@ -304,6 +298,43 @@ rauc/                   bundle manifest template and install hook
 scripts/                dev keys, bundle build
 .github/workflows/      CI and releases
 ```
+
+## How updates work
+
+RAUC streams the bundle over HTTPS (no local copy), and with the block-hash
+index it fetches only blocks that differ from the running slot group. The
+images land in the inactive group; a post-install hook stamps the partition
+UUIDs derived from the new root hash so the new UKI can find them. RAUC then
+sets the firmware's `BootNext` to the new group. If that boot succeeds,
+`jalea-mark-good.service` moves it to the front of `BootOrder`; if it does
+not, the firmware falls back to the previous group by itself.
+
+RAUC's slot switching goes through `/usr/lib/jalea/rauc-bootloader`, a small
+custom backend with the same BootNext/BootOrder semantics as RAUC's built-in
+EFI backend. The difference is how it tells which group is running: from the
+ESP that systemd-stub reports it was loaded from (`LoaderDevicePartUUID`),
+which works even when the firmware booted via the fallback loader and
+`BootCurrent` names no slot.
+
+That booted ESP also defines the *system disk*, and everything that names a
+slot partition is scoped to it. The installer stick is the same image as an
+installed system, so it carries the same partition labels, and when it holds
+the build that is running, the same usr/verity partition UUIDs. A udev rule
+(`61-jalea-system-disk.rules`, in the initrd too) gives the system disk's
+partitions priority for the `/dev/disk/by-partlabel` and `by-partuuid`
+symlinks, so RAUC's slots and the initrd's `/usr` lookup resolve to the
+right disk even with a stick inserted; `/usr/lib/jalea/system-disk` is the
+helper behind it. Still, take the stick out when you are not installing.
+
+If the new group cannot boot, the firmware falls back on its own: a UKI it
+cannot load is skipped for the next entry in `BootOrder`, and a UKI that
+loads but whose `/usr` fails verification makes the initrd reboot after
+systemd's 90-second device timeout (a drop-in in `mkosi.initrd.conf/`), with
+the same result. Both paths have been exercised in the VM.
+
+Nothing in `data` is part of a bundle. Rolling back to the previous group
+keeps your `/etc`, `/home` and Nix store exactly as they were; the store is
+content-addressed, so a base rollback cannot invalidate it.
 
 ## Status
 
