@@ -7,4 +7,4 @@ Requires=rauc.service
 
 [Service]
 Type=oneshot
-ExecStart=/usr/lib/jalea/update
+ExecStart=/usr/bin/jalea-update

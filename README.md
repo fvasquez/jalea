@@ -203,8 +203,9 @@ Updates are automatic. Once a day `jalea-update.timer` asks GitHub for the
 latest release and, if it is newer than the running image, streams its
 bundle into the inactive slot group. Nothing reboots: RAUC has already
 pointed the firmware at the new group, so it takes effect on the next
-reboot, and the login banner says so until then. `sudo systemctl start
-jalea-update` checks right now; `sudo rauc status` shows the slot groups.
+reboot, and the login banner says so until then. `sudo jalea-update` runs
+the same check right now, `jalea-update --check` only reports, and
+`sudo rauc status` shows the slot groups.
 `systemctl mask --now jalea-update.timer` turns it off (`disable` is undone
 at the next boot by the factory `/etc` merge).
 
@@ -296,7 +297,8 @@ mkosi.finalize          captures the factory /etc, generates sysusers.d
 mkosi.postinst          bakes the RAUC certificate into the image
 mkosi.extra/            files added to the image
   usr/lib/repart.d/     the encrypted root, created on the device
-  usr/lib/jalea/        installer, boot-entry repair, RAUC backend, daily update, nix-daemon wrapper, snapper and tailscale setup
+  usr/bin/              jalea-boot-stick, jalea-update
+  usr/lib/jalea/        installer, boot-entry repair, RAUC backend, nix-daemon wrapper, snapper and tailscale setup
   usr/share/factory/etc RAUC, Nix and zsh configuration
 rauc/                   bundle manifest template and install hook
 scripts/                dev keys, bundle build

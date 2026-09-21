@@ -1,14 +1,28 @@
 #!/bin/bash
-# Daily, from jalea-update.timer: if GitHub has a newer release than the
-# running image, stream its bundle into the inactive slot group. RAUC then
-# points the firmware's BootNext at that group, so the switch happens on
-# whatever reboot comes next; nothing here reboots. /run/jalea/update-pending
-# names the installed version until then (the login banner shows it), and
-# stops the next run from installing the same release again.
+# jalea-update [--check]
+#
+# If GitHub has a newer release than the running image, stream its bundle
+# into the inactive slot group. RAUC then points the firmware's BootNext at
+# that group, so the switch happens on whatever reboot comes next; nothing
+# here reboots. /run/jalea/update-pending names the installed version until
+# then (the login banner shows it), and stops a later run from installing
+# the same release again. jalea-update.timer runs this once a day; run it
+# by hand (as root) to check now. --check only reports.
 set -euo pipefail
 
 repo=fvasquez/jalea
 pending=/run/jalea/update-pending
+
+check=
+case ${1:-} in
+    --check) check=1 ;;
+    '') ;;
+    *) echo "usage: jalea-update [--check]" >&2; exit 2 ;;
+esac
+if [[ -z $check && $EUID -ne 0 ]]; then
+    echo "jalea-update: installing needs root; use sudo, or --check to only look" >&2
+    exit 1
+fi
 
 . /etc/os-release
 current=$IMAGE_VERSION
@@ -36,6 +50,10 @@ if [[ $latest == "$current" ]] ||
 fi
 if [[ -f $pending && $(<"$pending") == "$latest" ]]; then
     echo "update: $latest is installed, waiting for a reboot"
+    exit 0
+fi
+if [[ -n $check ]]; then
+    echo "update: $latest is available (running $current); run sudo jalea-update to install it"
     exit 0
 fi
 
