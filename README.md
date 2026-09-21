@@ -158,7 +158,9 @@ passphrase, then
 
 The installer powers the machine off. Remove the stick and power it on. The
 first boot is an ordinary boot: log in on
-the console or over SSH with the account you created. `sudo` works.
+the console or over SSH with the account you created. `sudo` works. The
+login shell is zsh, with a starter `~/.zshrc` from `/etc/skel`; bash is
+there too.
 
 Networking is systemd-networkd with DHCP on wired and wireless interfaces
 and iwd for Wi-Fi. To join another network later, use `iwctl`; iwd remembers
@@ -287,7 +289,7 @@ mkosi.postinst          bakes the RAUC certificate into the image
 mkosi.extra/            files added to the image
   usr/lib/repart.d/     the encrypted root, created on the device
   usr/lib/jalea/        installer, boot-entry repair, RAUC backend, nix-daemon wrapper, snapper setup
-  usr/share/factory/etc RAUC and Nix configuration
+  usr/share/factory/etc RAUC, Nix and zsh configuration
 rauc/                   bundle manifest template and install hook
 scripts/                dev keys, bundle build
 .github/workflows/      CI and releases

@@ -178,7 +178,7 @@ echo "$hostname" > "$mnt/etc/hostname"
 # systemd-sysusers reads these on first boot (ImportCredential=) and creates
 # the account with the chosen password. The user owns their group (uid=gid).
 install -d -m 0700 "$mnt/etc/credstore"
-printf 'g %s 1000\nu %s 1000:1000 "%s" /home/%s /bin/bash\nm %s sudo\nm %s systemd-journal\nm %s nix-users\n' \
+printf 'g %s 1000\nu %s 1000:1000 "%s" /home/%s /usr/bin/zsh\nm %s sudo\nm %s systemd-journal\nm %s nix-users\n' \
     "$username" "$username" "$username" "$username" "$username" "$username" "$username" \
     > "$mnt/etc/credstore/sysusers.extra"
 printf '%s' "$hash" > "$mnt/etc/credstore/passwd.hashed-password.$username"

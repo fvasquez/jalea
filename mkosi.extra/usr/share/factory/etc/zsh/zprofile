@@ -1,0 +1,3 @@
+# Debian ships this file empty, so a login zsh never reads /etc/profile and
+# misses /etc/profile.d (where Nix is put on PATH). Read it as sh would.
+emulate sh -c '. /etc/profile'

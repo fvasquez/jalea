@@ -1,1 +1,3 @@
 d /home/jalea 0700 jalea jalea -
+# From the factory tree, not /etc/skel: /etc is populated by tmpfiles too.
+C /home/jalea/.zshrc 0644 jalea jalea - /usr/share/factory/etc/skel/.zshrc

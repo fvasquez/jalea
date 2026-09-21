@@ -1,0 +1,3 @@
+# Defaults for useradd(8). zsh is Jalea's login shell; the installer and the
+# dev VM give the first account the same.
+SHELL=/usr/bin/zsh
