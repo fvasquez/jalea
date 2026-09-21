@@ -1,0 +1,46 @@
+#!/bin/bash
+# Daily, from jalea-update.timer: if GitHub has a newer release than the
+# running image, stream its bundle into the inactive slot group. RAUC then
+# points the firmware's BootNext at that group, so the switch happens on
+# whatever reboot comes next; nothing here reboots. /run/jalea/update-pending
+# names the installed version until then (the login banner shows it), and
+# stops the next run from installing the same release again.
+set -euo pipefail
+
+repo=fvasquez/jalea
+pending=/run/jalea/update-pending
+
+. /etc/os-release
+current=$IMAGE_VERSION
+
+release=$(curl --fail --silent --show-error --max-time 30 \
+    -H 'Accept: application/vnd.github+json' \
+    "https://api.github.com/repos/$repo/releases/latest")
+tag=$(jq -r .tag_name <<< "$release")
+latest=${tag#v}
+url=$(jq -r --arg n "jalea_$latest.raucb" \
+    '.assets[] | select(.name == $n) | .browser_download_url' <<< "$release")
+
+if [[ -z $latest || -z $url ]]; then
+    echo "update: latest release $tag has no bundle" >&2
+    exit 1
+fi
+
+# Newer means it sorts after the running version and is not the same one.
+# Local builds carry a git suffix (0.1.6-3-gabc1234) and sort after their
+# tag, so a dev image is never "updated" to the release it was built from.
+if [[ $latest == "$current" ]] ||
+   [[ $(printf '%s\n' "$current" "$latest" | sort -V | tail -1) != "$latest" ]]; then
+    echo "update: running $current, latest release is $latest, nothing to do"
+    exit 0
+fi
+if [[ -f $pending && $(<"$pending") == "$latest" ]]; then
+    echo "update: $latest is installed, waiting for a reboot"
+    exit 0
+fi
+
+echo "update: $current -> $latest, streaming $url"
+rauc install "$url"
+mkdir -p "$(dirname "$pending")"
+echo "$latest" > "$pending"
+echo "update: $latest installed; it boots on the next reboot"

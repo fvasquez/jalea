@@ -1,0 +1,5 @@
+#!/bin/sh
+# Login banner: an update that jalea-update installed is waiting for a reboot.
+if [ -f /run/jalea/update-pending ]; then
+    printf '\nJalea %s is installed. Reboot to switch to it.\n\n' "$(cat /run/jalea/update-pending)"
+fi

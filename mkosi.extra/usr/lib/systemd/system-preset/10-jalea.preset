@@ -10,6 +10,7 @@ enable jalea-mark-good.service
 enable jalea-snapper-setup.service
 enable tailscaled.service
 enable jalea-tailscale-operator.service
+enable jalea-update.timer
 enable nix-daemon.socket
 enable nix-daemon.service
 enable nix-upgrade.service

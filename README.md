@@ -232,6 +232,14 @@ symlinks, so RAUC's slots and the initrd's `/usr` lookup resolve to the
 right disk even with a stick inserted; `/usr/lib/jalea/system-disk` is the
 helper behind it. Still, take the stick out when you are not installing.
 
+Updates are also automatic. Once a day `jalea-update.timer` asks GitHub for
+the latest release and, if it is newer than the running image, streams its
+bundle into the inactive group. Nothing reboots: RAUC has already pointed
+the firmware at the new group, so it takes effect on the next reboot, and
+the login banner says so until then. `systemctl mask --now jalea-update.timer`
+turns it off (`disable` is undone at the next boot by the factory `/etc`
+merge). `sudo systemctl start jalea-update` checks right now.
+
 Local builds can be installed the same way by serving `mkosi.output/` over
 HTTP, or by copying the bundle over and running `rauc install` on the file.
 
@@ -294,7 +302,7 @@ mkosi.finalize          captures the factory /etc, generates sysusers.d
 mkosi.postinst          bakes the RAUC certificate into the image
 mkosi.extra/            files added to the image
   usr/lib/repart.d/     the encrypted root, created on the device
-  usr/lib/jalea/        installer, boot-entry repair, RAUC backend, nix-daemon wrapper, snapper and tailscale setup
+  usr/lib/jalea/        installer, boot-entry repair, RAUC backend, daily update, nix-daemon wrapper, snapper and tailscale setup
   usr/share/factory/etc RAUC, Nix and zsh configuration
 rauc/                   bundle manifest template and install hook
 scripts/                dev keys, bundle build

@@ -1,0 +1,11 @@
+[Unit]
+Description=Daily check for a new Jalea release
+Documentation=https://github.com/fvasquez/jalea
+
+[Timer]
+OnCalendar=daily
+RandomizedDelaySec=1h
+Persistent=yes
+
+[Install]
+WantedBy=timers.target
