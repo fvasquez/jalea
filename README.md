@@ -1,6 +1,6 @@
-<img src="docs/jalea.png" align="right" width="420" alt="A plate of jalea: fried seafood under pickled red onions">
-
 # Jalea
+
+<img src="docs/jalea.png" width="320" alt="A plate of jalea: fried seafood under pickled red onions">
 
 An immutable Debian, built with [mkosi](https://github.com/systemd/mkosi),
 with [Nix](https://nixos.org/) for everything that changes after that.
@@ -40,7 +40,8 @@ installed), and Nix, which keeps everything in a content-addressed
   running Jalea straight into it. Developed on an Intel NUC 13 Pro; anything
   that boots UEFI with a TPM2 should work.
 
-Jalea is the Peruvian platter of fried seafood: many things, one plate.
+Jalea is a Peruvian platter of fried seafood. The word "jalea" means "jelly"
+in Spanish. Tastes better than it sounds.
 
 ## Disk layout
 
