@@ -6,9 +6,9 @@ on:
     tags: ['v*']
     # Documentation does not change the image. (Path filters never apply to
     # tag pushes, so a release always builds.)
-    paths-ignore: ['**.md']
+    paths-ignore: ['**.md', 'docs/**']
   pull_request:
-    paths-ignore: ['**.md']
+    paths-ignore: ['**.md', 'docs/**']
   workflow_dispatch:
 
 permissions:
