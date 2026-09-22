@@ -1,6 +1,6 @@
 # Jalea
 
-<img src="docs/jalea.png" width="320" alt="A plate of jalea: fried seafood under pickled red onions">
+<img src="docs/jalea.png" align="right" width="320" alt="A plate of jalea: fried seafood under pickled red onions">
 
 An immutable Debian, built with [mkosi](https://github.com/systemd/mkosi),
 with [Nix](https://nixos.org/) for everything that changes after that.
