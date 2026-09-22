@@ -1,11 +1,13 @@
 #!/bin/bash
-# Once per data volume: let the first account (uid 1000, the one the
-# installer or the dev VM creates) drive tailscale without sudo. Operator
-# rights are a preference in tailscaled's state, so only the running daemon
-# can set them; hence a service, not the installer. Later changes by hand are
-# left alone: the stamp file keeps this from running again.
+# Let the first account (uid 1000, the one the installer or the dev VM
+# creates) drive tailscale without sudo. Operator rights are a preference in
+# tailscaled's state, so only the running daemon can set them; hence a
+# service, not the installer. Until the node has logged in there is no
+# profile to save them in, and a grant made on one boot is gone on the next.
+# So this runs every boot, but acts only while the node is logged out. Once
+# logged in the setting is saved with the profile, and changes made by hand
+# are left alone.
 set -euo pipefail
-stamp=/var/lib/tailscale/jalea-operator
 user=$(getent passwd 1000 | cut -d: -f1 || true)
 if [[ -z $user ]]; then
     echo "tailscale-operator: no account with uid 1000, nothing to do"
@@ -13,12 +15,21 @@ if [[ -z $user ]]; then
 fi
 # tailscaled's socket may not be up the moment the unit is active.
 for _ in 1 2 3 4 5; do
-    if tailscale set --operator="$user"; then
-        touch "$stamp"
-        echo "tailscale-operator: $user may use tailscale without sudo"
-        exit 0
-    fi
-    sleep 2
+    state=$(tailscale status --json 2>/dev/null | jq -r .BackendState || true)
+    case $state in
+        NeedsLogin|NoState)
+            tailscale set --operator="$user"
+            echo "tailscale-operator: $user may use tailscale without sudo"
+            exit 0
+            ;;
+        "")
+            sleep 2
+            ;;
+        *)
+            echo "tailscale-operator: node is logged in ($state), leaving the operator setting alone"
+            exit 0
+            ;;
+    esac
 done
 echo "tailscale-operator: could not reach tailscaled" >&2
 exit 1

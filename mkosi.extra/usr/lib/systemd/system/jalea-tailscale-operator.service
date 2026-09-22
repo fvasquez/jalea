@@ -1,12 +1,15 @@
 [Unit]
 Description=Let the first account use tailscale without sudo
 Documentation=https://github.com/fvasquez/jalea
-ConditionPathExists=!/var/lib/tailscale/jalea-operator
 After=tailscaled.service
 Requires=tailscaled.service
+# A restarted daemon starts without the grant too, so restart along with it.
+PartOf=tailscaled.service
 
 [Service]
 Type=oneshot
+# Stay active once done, or PartOf= has nothing to restart.
+RemainAfterExit=yes
 ExecStart=/usr/lib/jalea/tailscale-operator
 
 [Install]
