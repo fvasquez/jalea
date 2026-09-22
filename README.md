@@ -1,3 +1,5 @@
+<img src="docs/jalea.png" align="right" width="420" alt="A plate of jalea: fried seafood under pickled red onions">
+
 # Jalea
 
 An immutable Debian, built with [mkosi](https://github.com/systemd/mkosi),
@@ -6,11 +8,12 @@ with [Nix](https://nixos.org/) for everything that changes after that.
 > **Disclaimer: proof of concept. Not safe for human consumption.**
 >
 > Jalea exists to demonstrate an idea. It has not been reviewed, hardened,
-> or tested beyond a handful of machines. It repartitions disks, encrypts
-> them with keys sealed to a TPM, and replaces its own operating system over
-> the network. Any of that can destroy data, brick a machine, or lock you
-> out of your files, and the author takes no responsibility for what happens
-> with Jalea. Use it on hardware and data you can afford to lose.
+> or tested beyond QEMU VMs and a single Intel NUC 13 Pro. It repartitions
+> disks, encrypts them with keys sealed to a TPM, and replaces its own
+> operating system over the network. Any of that can destroy data, brick a
+> machine, or lock you out of your files, and the author takes no
+> responsibility for what happens with Jalea. Use it on hardware and data
+> you can afford to lose.
 
 Debian's package manager needs a writable root file system. Seal the root
 and apt stops working, which is the wall every immutable Debian hits. Jalea
@@ -154,9 +157,17 @@ mkosi burn /dev/sdX          # or: dd if=mkosi.output/jalea_<version>.raw of=/de
 ### Boot the stick
 
 Boot the stick with Secure Boot disabled. systemd-boot shows its menu for
-ten seconds; pick **Install Jalea to a disk**. The installer asks for the target disk, a
-hostname, a username and a password, and optionally a Wi-Fi network and
-passphrase, then
+ten seconds; pick **Install Jalea to a disk**. The installer asks for
+
+* the **target disk**, from a list of every disk but the stick, with the
+  first NVMe as the default,
+* a **hostname** (default `jalea`),
+* a **username** and a **password**,
+* optionally a **Wi-Fi network** (SSID) and its **passphrase**; leave the
+  network empty for none,
+* a typed `yes` before it touches the disk,
+
+then
 
 1. partitions the disk with systemd-repart, block-copying the ESP, usr and
    verity partitions it booted from into slot group A and leaving B empty,
