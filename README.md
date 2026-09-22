@@ -245,8 +245,8 @@ sudo reboot                               # switch to the new group
 sudo systemctl mask --now jalea-update.timer   # turn the daily check off
 ```
 
-`systemctl disable` would not stick: the factory `/etc` merge re-enables
-the timer at the next boot, so masking is the way to turn it off.
+`systemctl disable` has nothing to remove: units are enabled by symlinks
+that ship in `/usr` with the image, so masking is the way to turn one off.
 
 Local builds go the same way by hand: serve `mkosi.output/` over HTTP (with
 range requests; Python's `http.server` lacks them) or copy the bundle over.
