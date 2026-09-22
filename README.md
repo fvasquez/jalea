@@ -194,6 +194,10 @@ up. Sway is not enabled for autologin: the LUKS volume unlocks itself from
 the TPM2, so the password at the prompt is what stands between someone at
 the keyboard and your home directory.
 
+The system locale is `C.UTF-8`. Every locale is precompiled into the image,
+so `sudo localectl set-locale LANG=en_US.UTF-8` (or any other) works on the
+device; the choice lives in `/etc/locale.conf` on the encrypted volume.
+
 Networking is systemd-networkd with DHCP on wired and wireless interfaces
 and iwd for Wi-Fi. To join another network later, use `iwctl`; iwd remembers
 it under `/var/lib/iwd`, which is on the encrypted volume.
