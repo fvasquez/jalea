@@ -189,8 +189,11 @@ login shell is zsh, with a starter `~/.zshrc` from `/etc/skel`; bash is
 there too.
 
 tty1 shows a greetd prompt (tuigreet) instead of a getty; logging in there
-starts sway with its stock configuration. The text consoles are on tty2 and
-up. Sway is not enabled for autologin: the LUKS volume unlocks itself from
+starts sway. Jalea's own settings for sway and for foot, its terminal (2x
+scaling and larger fonts, for a TV-sized screen), live under
+`/usr/share/jalea` and change with each update; a file of your own under
+`/etc/sway/config.d/`, `/etc/xdg/foot/` or `~/.config` overrides them. The
+text consoles are on tty2 and up. Sway is not enabled for autologin: the LUKS volume unlocks itself from
 the TPM2, so the password at the prompt is what stands between someone at
 the keyboard and your home directory.
 
@@ -318,6 +321,7 @@ mkosi.extra/            files added to the image
   usr/bin/              jalea-boot-stick, jalea-update
   usr/lib/jalea/        installer, boot-entry repair, RAUC backend, nix-daemon wrapper, snapper and tailscale setup
   usr/share/factory/etc RAUC, Nix, zsh and greetd configuration
+  usr/share/jalea/      sway and foot defaults
 rauc/                   bundle manifest template and install hook
 scripts/                dev keys, bundle build
 .github/workflows/      CI and releases
