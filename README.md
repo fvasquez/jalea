@@ -9,11 +9,11 @@ with [Nix](https://nixos.org/) for everything that changes after that.
 >
 > Jalea exists to demonstrate an idea. It has not been reviewed, hardened,
 > or tested beyond QEMU VMs and a single Intel NUC 13 Pro. It repartitions
-> disks, encrypts them with keys sealed to a TPM, and replaces its own
-> operating system over the network. Any of that can destroy data, brick a
-> machine, or lock you out of your files, and the author takes no
-> responsibility for what happens with Jalea. Use it on hardware and data
-> you can afford to lose.
+> disks, encrypts them with keys sealed to a TPM, and automatically updates
+> itself over the air. Any of that can destroy data, brick a machine, or
+> lock you out of your own files. The author takes no responsibility for
+> what happens with Jalea. Use it on hardware and data you can afford to
+> lose.
 
 Debian's package manager needs a writable root file system. Seal the root
 and apt stops working, which is the wall every immutable Debian hits. Jalea
