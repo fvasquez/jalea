@@ -36,6 +36,8 @@ installed), and Nix, which keeps everything in a content-addressed
   the editor, out of the box.
 * **[Tailscale](https://tailscale.com/)** built in: one `tailscale up` and
   the machine is on your tailnet.
+* **[Sway](https://swaywm.org/)** for a graphical session, behind a
+  [greetd](https://sr.ht/~kennylevinsen/greetd/) login prompt on tty1.
 * A **USB installer** for real hardware, and `jalea-boot-stick` to reboot a
   running Jalea straight into it. Developed on an Intel NUC 13 Pro; anything
   that boots UEFI with a TPM2 should work.
@@ -186,6 +188,12 @@ the console or over SSH with the account you created. `sudo` works. The
 login shell is zsh, with a starter `~/.zshrc` from `/etc/skel`; bash is
 there too.
 
+tty1 shows a greetd prompt (tuigreet) instead of a getty; logging in there
+starts sway with its stock configuration. The text consoles are on tty2 and
+up. Sway is not enabled for autologin: the LUKS volume unlocks itself from
+the TPM2, so the password at the prompt is what stands between someone at
+the keyboard and your home directory.
+
 Networking is systemd-networkd with DHCP on wired and wireless interfaces
 and iwd for Wi-Fi. To join another network later, use `iwctl`; iwd remembers
 it under `/var/lib/iwd`, which is on the encrypted volume.
@@ -305,7 +313,7 @@ mkosi.extra/            files added to the image
   usr/lib/repart.d/     the encrypted root, created on the device
   usr/bin/              jalea-boot-stick, jalea-update
   usr/lib/jalea/        installer, boot-entry repair, RAUC backend, nix-daemon wrapper, snapper and tailscale setup
-  usr/share/factory/etc RAUC, Nix and zsh configuration
+  usr/share/factory/etc RAUC, Nix, zsh and greetd configuration
 rauc/                   bundle manifest template and install hook
 scripts/                dev keys, bundle build
 .github/workflows/      CI and releases

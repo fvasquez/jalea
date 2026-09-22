@@ -1,0 +1,15 @@
+# greetd: tuigreet on tty1, starting sway for the account that logs in.
+# Replaces Debian's default (agreety on tty7). Copied into /etc on every
+# boot unless a file is already there, so edits on the device stick.
+#
+# tuigreet keeps the last user name in /var/cache/tuigreet (its tmpfiles.d
+# entry creates the directory). --cmd names the session; a different one
+# can be typed at the prompt (F2). There is no autologin on purpose: the
+# LUKS root unlocks itself from the TPM2, so this prompt is the lock.
+
+[terminal]
+vt = 1
+
+[default_session]
+command = "tuigreet --time --remember --cmd sway"
+user = "_greetd"
