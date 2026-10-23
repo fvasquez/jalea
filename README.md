@@ -367,7 +367,9 @@ content-addressed, so a base rollback cannot invalidate it.
 ## Talk
 
 Jalea was presented at All Systems Go! 2026 in Berlin as *Make Debian
-immutable with mkosi and Nix*. The slides are in
+immutable with mkosi and Nix*. The
+[recording](https://media.ccc.de/v/all-systems-go-2026-415-make-debian-immutable-with-mkosi-and-nix)
+is on media.ccc.de, and the slides are in
 [`docs/MakeDebianImmutable.pdf`](docs/MakeDebianImmutable.pdf).
 
 ## Status
