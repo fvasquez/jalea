@@ -364,6 +364,12 @@ Nothing in `data` is part of a bundle. Rolling back to the previous group
 keeps your `/etc`, `/home` and Nix store exactly as they were; the store is
 content-addressed, so a base rollback cannot invalidate it.
 
+## Talk
+
+Jalea was presented at All Systems Go! 2026 in Berlin as *Make Debian
+immutable with mkosi and Nix*. The slides are in
+[`docs/MakeDebianImmutable.pdf`](docs/MakeDebianImmutable.pdf).
+
 ## Status
 
 Early. Secure Boot with self-enrolled keys, which would let the TPM policy
