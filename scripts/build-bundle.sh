@@ -4,7 +4,7 @@
 #   mkosi.output/jalea_<v>.esp.raw     -> esp.vfat   (UKI + systemd-boot)
 #   mkosi.output/jalea_<v>.usr.raw     -> usr.img    (erofs, verity data)
 #   mkosi.output/jalea_<v>.verity.raw  -> verity.img (hash tree)
-#   usrhash from the UKI's command line -> roothash  (read by the hook)
+#   usrhash from the UKI's command line -> usrhash   (read by the hook)
 #
 # Output: mkosi.output/jalea_<v>.raucb, verity format, adaptive updates
 # enabled, signed with keys/rauc.key.
@@ -30,7 +30,7 @@ trap 'rm -rf "$tmp"' EXIT
 cp --reflink=auto "$out/$name.esp.raw" "$tmp/esp.vfat"
 cp --reflink=auto "$out/$name.usr.raw" "$tmp/usr.img"
 cp --reflink=auto "$out/$name.verity.raw" "$tmp/verity.img"
-printf '%s\n' "$usrhash" > "$tmp/roothash"
+printf '%s\n' "$usrhash" > "$tmp/usrhash"
 install -m 0755 rauc/hook "$tmp/hook"
 sed "s/@VERSION@/$version/g" rauc/manifest.raucm.in > "$tmp/manifest.raucm"
 
