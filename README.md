@@ -316,6 +316,7 @@ and checksums, to a GitHub Release.
 
 ```
 mkosi.conf              image definition
+mkosi.conf.d/           tools-tree packages when the tools tree is Debian (CI)
 mkosi.repart/           partition table of the built image (A populated, B empty)
 mkosi.uki-profiles/     the "Install" boot entry
 mkosi.profiles/dev/     SSH over vsock for development VMs
