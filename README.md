@@ -283,7 +283,11 @@ nix profile install nixpkgs#nix
 ```
 
 into the system profile and restarts the daemon on the result, so the daemon
-you talk to is current Nix, not the one Debian froze. From then on:
+you talk to is current Nix, not the one Debian froze. Image updates never
+touch `/nix`, so the same service keeps it current: it runs at every boot and
+from `nix-upgrade.timer` daily, checks nixpkgs at most once a week, and
+restarts the daemon only when Nix actually changed
+(`sudo systemctl mask --now nix-upgrade.timer` turns it off). From then on:
 
 ```sh
 nix profile install nixpkgs#htop
@@ -323,7 +327,7 @@ mkosi.postinst          bakes the RAUC certificate into the image
 mkosi.extra/            files added to the image
   usr/lib/repart.d/     the encrypted root, created on the device
   usr/bin/              jalea-boot-stick, jalea-update
-  usr/lib/jalea/        installer, boot-entry repair, RAUC backend, nix-daemon wrapper, snapper and tailscale setup
+  usr/lib/jalea/        installer, boot-entry repair, RAUC backend, nix-daemon wrapper and upgrade, snapper and tailscale setup
   usr/share/factory/etc RAUC, Nix, zsh and greetd configuration
   usr/share/jalea/      sway and foot defaults
 rauc/                   bundle manifest template and install hook

@@ -1,0 +1,10 @@
+[Unit]
+Description=Daily check for a newer Nix
+Documentation=https://github.com/fvasquez/jalea
+
+[Timer]
+OnCalendar=daily
+RandomizedDelaySec=1h
+
+[Install]
+WantedBy=timers.target

@@ -1,0 +1,42 @@
+#!/bin/sh
+# Keep the Nix in the system profile current. Debian's nix-bin is only the
+# seed: the first run with network adds nixpkgs#nix to the profile, later
+# runs upgrade it. Image updates never touch /nix, so this is the only thing
+# that moves Nix forward. The daemon is restarted only when the profile
+# actually changed.
+set -eu
+
+profile=/nix/var/nix/profiles/default
+stamp=/nix/var/nix/jalea-nix-upgrade.stamp
+features='nix-command flakes'
+
+nix=/usr/bin/nix
+[ -x "$profile/bin/nix" ] && nix=$profile/bin/nix
+
+# Started on every boot and daily by nix-upgrade.timer; fetching nixpkgs is
+# ~40 MB, so check at most once a week once Nix is in place.
+if [ -x "$profile/bin/nix" ] && [ -n "$(find "$stamp" -mtime -7 2>/dev/null)" ]; then
+    echo "checked within the last week, nothing to do"
+    exit 0
+fi
+
+before=$(readlink -f "$profile" 2>/dev/null || true)
+# 'nix profile upgrade' exits 0 even when no element matches, so look for
+# the element first; it is missing on the first run or if someone removed it.
+# (The JSON form: the plain listing is coloured even into a pipe.)
+if "$nix" --extra-experimental-features "$features" profile list --profile "$profile" --json 2>/dev/null |
+    grep -q '"nix":{'; then
+    "$nix" --extra-experimental-features "$features" profile upgrade --profile "$profile" nix
+else
+    "$nix" --extra-experimental-features "$features" profile install --profile "$profile" nixpkgs#nix
+fi
+touch "$stamp"
+after=$(readlink -f "$profile")
+
+if [ "$before" = "$after" ]; then
+    echo "Nix is current: $("$profile/bin/nix" --version)"
+    exit 0
+fi
+echo "now $("$profile/bin/nix" --version), restarting nix-daemon"
+# --no-block: a synchronous restart of the daemon would tear this unit down with it.
+systemctl --no-block restart nix-daemon.service
