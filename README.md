@@ -27,6 +27,9 @@ installed), and Nix, which keeps everything in a content-addressed
 
 * **Debian 13 (trixie)** in a read-only erofs `/usr`, protected by dm-verity
   and booted as a unified kernel image.
+* **UEFI Secure Boot** through Debian's Microsoft-signed shim: systemd-boot
+  and the UKI are signed with Jalea's own key, which you enroll once as a
+  Machine Owner Key (MOK). The Microsoft keys in the firmware stay as they are.
 * **All user data**, including `/etc`, `/var`, `/home` and `/nix`, on one
   **LUKS2 volume** whose key is sealed to the TPM2 with systemd-cryptenroll's
   token format. It unlocks itself at boot and is never touched by updates.
@@ -53,7 +56,7 @@ in Spanish. Tastes better than it sounds.
 
 | Partition  | Type          | Contents                                              |
 |------------|---------------|-------------------------------------------------------|
-| `esp_a`    | ESP           | UKI `EFI/Linux/jalea.efi`, systemd-boot as fallback   |
+| `esp_a`    | ESP           | UKI `EFI/Linux/jalea.efi`; shim, MokManager and systemd-boot under `EFI/BOOT`; `jalea-secureboot.cer` |
 | `verity_a` | usr-verity    | dm-verity hash tree                                   |
 | `usr_a`    | usr           | Debian, erofs, read-only                              |
 | `esp_b`    | ESP           | slot group B, empty until the first update            |
@@ -98,8 +101,12 @@ ln -s ~/mkosi/bin/mkosi ~/.local/bin/mkosi
 mkosi builds its own tools tree, so the host needs only Python, a package
 manager it knows (dnf, apt, pacman, zypper) and user namespaces.
 
+The Secure Boot key is not generated: put the pair you sign with, the one
+your machines enrolled, at `keys/secureboot.key` and `keys/secureboot.crt`
+(see [Signing keys and releases](#signing-keys-and-releases)).
+
 ```sh
-./scripts/gen-dev-keys.sh   # once: throwaway signing keys in keys/
+./scripts/gen-dev-keys.sh   # once: throwaway RAUC and ssh keys in keys/
 mkosi build                 # release-shaped image
 mkosi --profile=dev build   # same, plus SSH over vsock for `mkosi ssh`
 ```
@@ -117,7 +124,9 @@ This produces, in `mkosi.output/`:
 mkosi vm
 ```
 
-The VM gets a virtual TPM and a disk grown to 16 GB. On first boot
+The VM is for testing, not a supported target. It gets a virtual TPM,
+Secure Boot with the build's certificate already enrolled, and a disk grown
+to 16 GB. On first boot
 systemd-repart creates the encrypted root, then you land on a serial console
 as user `jalea` (password `jalea`, member of `sudo` and `nix-users`). Those
 credentials come from `mkosi.credentials/` and exist only in the VM. With the
@@ -161,10 +170,33 @@ Write a local build instead:
 mkosi burn /dev/sdX          # or: dd if=mkosi.output/jalea_<version>.raw of=/dev/sdX bs=4M
 ```
 
+### Enroll Jalea's key
+
+Jalea installs only with Secure Boot **on**. The disk encryption key is
+sealed to the TPM together with the Secure Boot state (PCR 7): a disk
+installed with Secure Boot off would stop unlocking, and its data would be
+gone, the day Secure Boot is turned on.
+
+1. In the firmware setup, turn Secure Boot on with the standard Microsoft
+   keys. If there is an option for the Microsoft third-party UEFI CA (some
+   machines call it "Allow Microsoft 3rd-party UEFI CA"), it must be on:
+   that is the key shim is signed with.
+2. Boot the stick. shim starts, cannot verify Jalea's boot loader yet,
+   prints a verification error and starts MokManager.
+3. In MokManager choose **Enroll key from disk**, the stick's EFI partition,
+   and `jalea-secureboot.cer`. Check that the key is Jalea's, confirm, and
+   reboot.
+
+The key now lives in the firmware's MokList and survives a reinstall; this
+is needed once per machine. `mokutil --list-enrolled` shows it from a
+running Jalea. Release images and local builds are signed with the same
+key, so one enrollment covers both.
+
 ### Boot the stick
 
-Boot the stick with Secure Boot disabled. systemd-boot shows its menu for
-ten seconds; pick **Install Jalea to a disk**. The installer asks for
+With the key enrolled, the stick boots: systemd-boot shows its menu for
+ten seconds; pick **Install Jalea to a disk**. The installer refuses to run
+with Secure Boot off and explains the steps above. It asks for
 
 * the **target disk**, from a list of every disk but the stick, with the
   first NVMe as the default,
@@ -184,7 +216,9 @@ then
    systemd-sysusers consumes on first boot) onto the new root, plus an iwd
    profile for the Wi-Fi network if you gave one, so the machine is online
    on its first boot,
-4. creates firmware boot entries `A` and `B` pointing at the two UKIs.
+4. creates firmware boot entries `A` and `B` that start shim with the UKI
+   on `esp_a` or `esp_b` as its argument, so shim verifies and starts the
+   UKI directly, without a boot menu.
 
 The installer powers the machine off. Remove the stick and power it on. The
 first boot is an ordinary boot: log in on
@@ -301,6 +335,18 @@ Flakes and `nix-command` are enabled in `/etc/nix/nix.conf`. Members of
 
 ## Signing keys and releases
 
+Two keys sign a release: the Secure Boot key (systemd-boot and the UKI) and
+the RAUC key (the update bundle).
+
+The Secure Boot key's certificate is what machines enroll as a MOK, so every
+release must be signed with the same one: an update signed with a different
+key would not pass shim on a machine that enrolled the old one. There is
+no throwaway Secure Boot key: local builds read `keys/secureboot.{key,crt}`,
+and CI writes them from the `SECUREBOOT_KEY` repository secret (private key,
+PEM) and the `SECUREBOOT_CERT` repository variable (certificate, PEM); a
+build fails if either is missing. Changing the key on enrolled machines is
+not supported yet.
+
 Bundles are signed with an X.509 key. Locally, `scripts/gen-dev-keys.sh`
 makes a self-signed pair in `keys/`, and that certificate is baked into the
 image as `/etc/rauc/keyring.pem`. If `keys/release.crt` is present as well
@@ -324,7 +370,7 @@ mkosi.sandbox/          Tailscale's apt repository and key, for the build only
 mkosi.credentials/      dev VM account and autologin (never in the image)
 mkosi.prepare           installs Helix, the default editor, from upstream
 mkosi.finalize          captures the factory /etc, generates sysusers.d
-mkosi.postinst          bakes the RAUC certificate into the image
+mkosi.postinst          bakes the RAUC certificate into the image, puts the Secure Boot certificate on the ESP
 mkosi.extra/            files added to the image
   usr/lib/repart.d/     the encrypted root, created on the device
   usr/bin/              jalea-boot-stick, jalea-update
@@ -367,7 +413,13 @@ If the new group cannot boot, the firmware falls back on its own: a UKI it
 cannot load is skipped for the next entry in `BootOrder`, and a UKI that
 loads but whose `/usr` fails verification makes the initrd reboot after
 systemd's 90-second device timeout (a drop-in in `mkosi.initrd.conf/`), with
-the same result. Both paths have been exercised in the VM.
+the same result. Both paths have been exercised in the VM. With Secure Boot
+on, a UKI that fails shim's signature check falls back the same way, but
+only after shim's error prompt times out (about two minutes in the VM). The
+bundle hook
+guards against installing one: on the efi slot it checks the new UKI with
+`sbverify` against every certificate in the MOK list and fails the install,
+before the boot switches groups, if none of them signed it.
 
 Nothing in `data` is part of a bundle. Rolling back to the previous group
 keeps your `/etc`, `/home` and Nix store exactly as they were; the store is
@@ -375,8 +427,10 @@ content-addressed, so a base rollback cannot invalidate it.
 
 ## Status
 
-Early. Secure Boot with self-enrolled keys, which would let the TPM policy
-cover the boot chain, is planned but not required. Contributions welcome.
+Early. Secure Boot covers the boot chain through shim and a MOK, and the
+disk key is sealed to PCR 7. A machine installed before Secure Boot support
+keeps working with Secure Boot off; turning it on there needs a reinstall,
+which erases the data volume. Contributions welcome.
 
 ## License
 

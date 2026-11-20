@@ -2,6 +2,11 @@
 # Make sure the firmware has boot entries "A" and "B" that load the UKI
 # directly from esp_a and esp_b, and that BootOrder lists both. RAUC's efi
 # backend relies on these labels. Idempotent; safe to run every boot.
+#
+# An entry starts shim (EFI/BOOT/BOOTX64.EFI, signed by Microsoft) with the
+# UKI as its load option; shim checks the UKI against the enrolled MOK and
+# starts it without going through systemd-boot. Existing entries are only
+# matched by label and left as they are.
 set -euo pipefail
 
 [[ -d /sys/firmware/efi/efivars ]] || { echo "not an EFI boot, nothing to do"; exit 0; }
@@ -10,7 +15,14 @@ set -euo pipefail
 # partitions too, and an entry pointing at it would be worse than none.
 disk=$(/usr/lib/jalea/system-disk) || { echo "cannot identify the system disk, nothing to do"; exit 0; }
 
-loader='\EFI\Linux\jalea.efi'
+shim='\EFI\BOOT\BOOTX64.EFI'
+uki='\EFI\Linux\jalea.efi'
+# shim ignores a load option that is not NUL-terminated (and then loads
+# systemd-boot instead); efibootmgr's --unicode adds no terminator, so the
+# option goes in as raw UTF-16LE bytes from a file.
+uki_opt=$(mktemp -p /run)
+trap 'rm -f "$uki_opt"' EXIT
+{ printf '%s' "$uki" | iconv -t UTF-16LE; printf '\0\0'; } > "$uki_opt"
 changed=0
 declare -A id
 
@@ -26,9 +38,9 @@ for slot in A B; do
         id[$slot]=$existing
         continue
     fi
-    efibootmgr --quiet --create --disk "$disk" --part "$num" --label "$slot" --loader "$loader"
+    efibootmgr --quiet --create --disk "$disk" --part "$num" --label "$slot" --loader "$shim" -@ "$uki_opt"
     id[$slot]=$(efibootmgr | sed -n "s/^Boot\([0-9A-F]\{4\}\)\*\{0,1\} $slot\([[:space:]].*\)\{0,1\}\$/\1/p" | head -1)
-    echo "created boot entry $slot (Boot${id[$slot]}) -> $disk part $num $loader"
+    echo "created boot entry $slot (Boot${id[$slot]}) -> $disk part $num $shim $uki"
     changed=1
 done
 

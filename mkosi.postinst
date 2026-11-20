@@ -7,6 +7,10 @@
 #                      throwaway certificate from scripts/gen-dev-keys.sh.
 #   keys/release.crt   if present, appended, so a locally built image also
 #                      accepts bundles published on GitHub Releases.
+#
+# and puts the Secure Boot certificate on the ESP, in DER form, as
+# /jalea-secureboot.cer: the file to pick in MokManager's "Enroll key from
+# disk" the first time the machine boots Jalea with Secure Boot on.
 set -euo pipefail
 cert="$SRCDIR/keys/rauc.crt"
 if [[ ! -f $cert ]]; then
@@ -19,3 +23,12 @@ if [[ -f $SRCDIR/keys/release.crt ]] && ! cmp -s "$cert" "$SRCDIR/keys/release.c
     cat "$SRCDIR/keys/release.crt" >> "$keyring"
 fi
 echo "mkosi.postinst: keyring holds $(grep -c 'BEGIN CERTIFICATE' "$keyring") certificate(s)"
+
+sbcert="$SRCDIR/keys/secureboot.crt"
+if [[ ! -f $sbcert ]]; then
+    echo "mkosi.postinst: $sbcert not found; put the Secure Boot key pair at keys/secureboot.{key,crt}" >&2
+    exit 1
+fi
+install -d -m 0755 "$BUILDROOT/efi"
+openssl x509 -in "$sbcert" -outform DER -out "$BUILDROOT/efi/jalea-secureboot.cer"
+echo "mkosi.postinst: ESP carries jalea-secureboot.cer ($(openssl x509 -in "$sbcert" -noout -subject))"

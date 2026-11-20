@@ -25,10 +25,12 @@ jobs:
       - name: Install mkosi
         uses: systemd/mkosi@v27
 
-      - name: RAUC signing material
+      - name: Signing material
         env:
           RAUC_KEY: ${{ secrets.RAUC_KEY }}
           RAUC_CERT: ${{ vars.RAUC_CERT }}
+          SECUREBOOT_KEY: ${{ secrets.SECUREBOOT_KEY }}
+          SECUREBOOT_CERT: ${{ vars.SECUREBOOT_CERT }}
         run: |
           mkdir -p keys
           if [ -n "$RAUC_KEY" ] && [ -n "$RAUC_CERT" ]; then
@@ -37,9 +39,21 @@ jobs:
             chmod 0600 keys/rauc.key
             echo "using the repository's RAUC key"
           else
-            ./scripts/gen-dev-keys.sh
             echo "::warning::RAUC_KEY/RAUC_CERT not set; bundle signed with a throwaway key"
           fi
+          if [ -n "$SECUREBOOT_KEY" ] && [ -n "$SECUREBOOT_CERT" ]; then
+            printf '%s\n' "$SECUREBOOT_KEY" > keys/secureboot.key
+            printf '%s\n' "$SECUREBOOT_CERT" > keys/secureboot.crt
+            chmod 0600 keys/secureboot.key
+            echo "using the repository's Secure Boot key"
+          else
+            # There is no throwaway fallback: an image signed with any other
+            # key does not boot on a machine that enrolled this one.
+            echo "::error::SECUREBOOT_KEY/SECUREBOOT_CERT not set; the image must be signed with the enrolled key"
+            exit 1
+          fi
+          # RAUC and ssh pairs still missing get a throwaway pair.
+          ./scripts/gen-dev-keys.sh
 
       - name: Build image
         run: mkosi --debug build

@@ -21,3 +21,4 @@ hooks=post-install
 
 [image.efi]
 filename=esp.vfat
+hooks=post-install

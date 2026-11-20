@@ -1,19 +1,31 @@
 #!/bin/bash
-# Create a throwaway, self-signed RAUC signing key pair for local builds.
-# keys/ is gitignored. Release bundles are signed in CI from the RAUC_KEY
-# secret and RAUC_CERT variable instead.
+# Create throwaway, self-signed key pairs for local builds, each one only if
+# it does not exist yet. keys/ is gitignored. Release builds are signed in CI
+# from repository secrets and variables instead (see .github/workflows).
+#
+#   keys/rauc.{key,crt}  RAUC bundle signing
+#   keys/ssh.{key,crt}   mkosi ssh into the dev VM
+#
+# Not the Secure Boot key: keys/secureboot.{key,crt} must be the real one,
+# the key machines have enrolled as their MOK, or nothing built with it
+# boots under Secure Boot. Put it there yourself.
 set -euo pipefail
 cd "$(dirname "$0")/.."
 mkdir -p keys
-if [[ -f keys/rauc.key || -f keys/rauc.crt ]]; then
-    echo "keys/rauc.key or keys/rauc.crt already exists; not overwriting" >&2
-    exit 1
-fi
-openssl req -x509 -newkey rsa:4096 -sha256 -days 3650 -nodes \
-    -subj "/O=Jalea/CN=Jalea development bundle signing" \
-    -keyout keys/rauc.key -out keys/rauc.crt
-chmod 0600 keys/rauc.key
-openssl req -x509 -newkey rsa:4096 -sha256 -days 3650 -nodes \
-    -subj "/CN=Jalea dev VM ssh" -keyout keys/ssh.key -out keys/ssh.crt 2>/dev/null
-chmod 0600 keys/ssh.key
-echo "wrote keys/rauc.{key,crt} (bundle signing) and keys/ssh.{key,crt} (mkosi ssh)"
+
+# gen NAME SUBJECT BITS [openssl req args...]
+gen() {
+    local name=$1 subj=$2 bits=$3
+    shift 3
+    if [[ -f keys/$name.key || -f keys/$name.crt ]]; then
+        echo "keys/$name.{key,crt}: exists, kept"
+        return
+    fi
+    openssl req -x509 -newkey "rsa:$bits" -sha256 -days 3650 -nodes \
+        -subj "$subj" -keyout "keys/$name.key" -out "keys/$name.crt" "$@" 2>/dev/null
+    chmod 0600 "keys/$name.key"
+    echo "keys/$name.{key,crt}: created"
+}
+
+gen rauc "/O=Jalea/CN=Jalea development bundle signing" 4096
+gen ssh "/CN=Jalea dev VM ssh" 4096

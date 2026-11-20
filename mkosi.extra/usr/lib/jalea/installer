@@ -9,6 +9,14 @@
 #
 # Then it creates firmware boot entries A and B. The installed system's
 # first boot is a normal boot: nothing is left to provision.
+#
+# Secure Boot must be on. The data volume's key is sealed to TPM PCR 7, which
+# records the Secure Boot state and the keys that verified the boot chain; a
+# volume sealed with Secure Boot off would no longer unlock once it is turned
+# on. Booting the stick with Secure Boot on means Jalea's key is already
+# enrolled as a MOK (MokManager, "Enroll key from disk", jalea-secureboot.cer
+# on the stick's ESP), so the seal is made in the same state, with the same
+# keys, as every later boot of the installed system.
 set -euo pipefail
 
 defs=/usr/lib/jalea/install/repart.d
@@ -22,6 +30,30 @@ echo "=== Jalea installer ==="
 echo
 
 udevadm settle || true
+
+# --- 0. Secure Boot ----------------------------------------------------------
+# EFI variable: 4 bytes of attributes, then 1 byte, 1 = on. efivarfs files
+# cannot be read at an offset, hence cat | tail.
+sb=$(cat /sys/firmware/efi/efivars/SecureBoot-8be4df61-93ca-11d2-aa0d-00e098032b8c 2>/dev/null \
+    | tail -c +5 | od -An -tu1 | tr -d ' \n' || true)
+if [[ $sb != 1 ]]; then
+    cat >&2 <<'MSG'
+Secure Boot is off.
+
+Jalea seals the disk encryption key to the TPM together with the Secure Boot
+state, so it has to be installed with Secure Boot on:
+
+  1. Turn Secure Boot on in the firmware setup (with the standard Microsoft
+     keys; the "third-party UEFI CA" option, if there is one, must be on).
+  2. Boot this stick again. shim reports a verification failure and starts
+     MokManager.
+  3. Choose "Enroll key from disk", the stick's EFI partition, and the file
+     jalea-secureboot.cer. Confirm, then reboot.
+  4. Pick "Install Jalea to a disk" again.
+MSG
+    die "Secure Boot is off; refusing to install"
+fi
+echo "Secure Boot is on."
 
 # --- 1. Where did we boot from, and what can we install to? -----------------
 # systemd-stub records the partition it was loaded from; that is the stick.
@@ -202,14 +234,24 @@ umount "$mnt"
 /usr/lib/systemd/systemd-cryptsetup detach jalea-install
 
 # --- 5. Firmware boot entries ----------------------------------------------
+# Each entry starts shim, which Microsoft's key in the firmware db verifies,
+# and passes it the UKI as its load option: shim verifies that against the
+# MOK and starts it, with no boot menu in between. (Pointed at the UKI
+# itself, the firmware would check it against db, which our key is not in.)
+# shim ignores a load option that is not NUL-terminated (and then loads
+# systemd-boot instead); efibootmgr's --unicode adds no terminator, so the
+# option goes in as raw UTF-16LE bytes from a file.
 echo "Creating firmware boot entries A and B ..."
+uki_opt=$run/uki-load-option
+{ printf '%s' '\EFI\Linux\jalea.efi' | iconv -t UTF-16LE; printf '\0\0'; } > "$uki_opt"
 for slot in A B; do
     label=esp_${slot,,}
     num=$(lsblk -lno PARTN,PARTLABEL "$target" | awk -v l="$label" '$2==l{print $1}')
     [[ -n $num ]] || die "partition $label missing on $target"
     old=$(efibootmgr | sed -n "s/^Boot\([0-9A-F]\{4\}\)\*\{0,1\} $slot\([[:space:]].*\)\{0,1\}\$/\1/p")
     for o in $old; do efibootmgr --quiet --delete-bootnum --bootnum "$o"; done
-    efibootmgr --quiet --create --disk "$target" --part "$num" --label "$slot" --loader '\EFI\Linux\jalea.efi'
+    efibootmgr --quiet --create --disk "$target" --part "$num" --label "$slot" \
+        --loader '\EFI\BOOT\BOOTX64.EFI' -@ "$uki_opt"
 done
 a=$(efibootmgr | sed -n 's/^Boot\([0-9A-F]\{4\}\)\*\{0,1\} A\([[:space:]].*\)\{0,1\}$/\1/p' | head -1)
 b=$(efibootmgr | sed -n 's/^Boot\([0-9A-F]\{4\}\)\*\{0,1\} B\([[:space:]].*\)\{0,1\}$/\1/p' | head -1)

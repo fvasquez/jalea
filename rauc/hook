@@ -8,13 +8,48 @@
 # the last 128 bits. systemd-repart sets those UUIDs when it builds the image;
 # after RAUC dd's the same images into the other slot group, this hook sets
 # them on the target partitions so the freshly installed UKI can find them.
+#
+# On the efi slot it checks, with Secure Boot on, that the new UKI is signed
+# by a key enrolled in the MOK list. shim would refuse a UKI that is not,
+# and the firmware only falls back to the other slot group after shim's
+# error prompt has timed out (about two minutes); failing here stops the
+# install before RAUC points the next boot at it. With Secure Boot off
+# nothing checks signatures at boot, so neither does this.
 set -eu
 
 here=$(dirname "$(readlink -f "$0")")
 usrhash=$(cat "$here/usrhash")
 
+check_uki() {
+    uki=$RAUC_SLOT_MOUNT_POINT/EFI/Linux/jalea.efi
+    if [ "$(mokutil --sb-state 2>/dev/null)" != "SecureBoot enabled" ]; then
+        echo "Secure Boot is off; not checking the UKI's signature"
+        return 0
+    fi
+    [ -f "$uki" ] || { echo "no EFI/Linux/jalea.efi in the new efi slot" >&2; return 1; }
+    tmp=$(mktemp -d)
+    trap 'rm -rf "$tmp"' EXIT
+    # mokutil --export writes each enrolled certificate as MOK-NNNN.der
+    # into the current directory; sbverify wants PEM.
+    (cd "$tmp" && mokutil --export >/dev/null 2>&1) || true
+    for der in "$tmp"/MOK-*.der; do
+        [ -f "$der" ] || continue
+        openssl x509 -inform DER -in "$der" -out "$der.pem" 2>/dev/null || continue
+        if sbverify --cert "$der.pem" "$uki" >/dev/null 2>&1; then
+            echo "UKI signed by enrolled MOK: $(openssl x509 -in "$der.pem" -noout -subject)"
+            return 0
+        fi
+    done
+    echo "the new UKI is not signed by any key in the MOK list; shim would refuse to boot it" >&2
+    return 1
+}
+
 case "$1" in
 slot-post-install)
+    if [ "$RAUC_SLOT_CLASS" = efi ]; then
+        check_uki
+        exit $?
+    fi
     uuid_for_class() {
         case "$1" in
         usr) printf '%s' "$usrhash" | cut -c1-32 ;;
